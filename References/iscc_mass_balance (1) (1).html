@@ -1,0 +1,676 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#0E1B19;
+    --bg-panel:#132622;
+    --bg-raised:#17302B;
+    --line:#264840;
+    --line-soft:#1D3630;
+    --teal:#33A585;
+    --teal-dim:#1F6F5C;
+    --amber:#E3A335;
+    --red:#DB6B58;
+    --text:#EDEAE0;
+    --text-dim:#8FA9A1;
+    --text-faint:#5E7A72;
+  }
+  *{box-sizing:border-box;}
+  #imbc-root{
+    font-family:'IBM Plex Sans',sans-serif;
+    color:var(--text);
+    background:var(--bg);
+    padding:0;
+    min-height:100%;
+    font-size:14px;
+    line-height:1.5;
+  }
+  #imbc-root .mono{font-family:'IBM Plex Mono',monospace;}
+  #imbc-root h1,#imbc-root h2,#imbc-root h3{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    margin:0;
+  }
+  .imbc-shell{max-width:1180px;margin:0 auto;padding:22px 20px 60px;}
+
+  /* header */
+  .imbc-header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap;}
+  .imbc-title-block{display:flex;align-items:center;gap:12px;}
+  .imbc-mark{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--teal),var(--teal-dim));display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .imbc-mark svg{width:19px;height:19px;}
+  .imbc-title{font-size:19px;letter-spacing:.2px;}
+  .imbc-subtitle{color:var(--text-dim);font-size:12.5px;margin-top:2px;}
+  .imbc-header-stats{display:flex;gap:22px;}
+  .imbc-hstat{text-align:right;}
+  .imbc-hstat .n{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;}
+  .imbc-hstat .l{font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;}
+
+  /* tabs */
+  .imbc-tabs{display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--line);}
+  .imbc-tab{padding:9px 16px;font-size:13px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;transition:.15s;user-select:none;}
+  .imbc-tab:hover{color:var(--text);}
+  .imbc-tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+
+  .imbc-panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:10px;padding:18px;}
+  .imbc-panel + .imbc-panel{margin-top:14px;}
+  .imbc-panel h2{font-size:14.5px;margin-bottom:4px;}
+  .imbc-panel-sub{color:var(--text-dim);font-size:12px;margin-bottom:14px;}
+
+  /* form */
+  .imbc-form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .imbc-field{display:flex;flex-direction:column;gap:5px;}
+  .imbc-field.span2{grid-column:span 2;}
+  .imbc-field label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;}
+  .imbc-field input,.imbc-field select{
+    background:var(--bg-raised);border:1px solid var(--line);color:var(--text);
+    border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;
+  }
+  .imbc-field input:focus,.imbc-field select:focus{border-color:var(--teal);}
+  .imbc-radio-row{display:flex;gap:6px;}
+  .imbc-radio-opt{flex:1;text-align:center;padding:8px 6px;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text-dim);transition:.15s;}
+  .imbc-radio-opt.sel{border-color:var(--teal);color:var(--teal);background:rgba(51,165,133,0.08);}
+  .imbc-radio-opt.sel.out{border-color:var(--amber);color:var(--amber);background:rgba(227,163,53,0.08);}
+  .imbc-radio-opt.sel.conv{border-color:#7CA6E8;color:#7CA6E8;background:rgba(124,166,232,0.08);}
+
+  .imbc-btn{background:var(--teal);color:#08120F;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:.15s;}
+  .imbc-btn:hover{background:#3DBB98;}
+  .imbc-btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text-dim);}
+  .imbc-btn.ghost:hover{color:var(--text);border-color:var(--text-dim);}
+  .imbc-btn.small{padding:5px 10px;font-size:11.5px;}
+  .imbc-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .imbc-error{color:var(--red);font-size:12px;margin-top:8px;}
+  .imbc-hint{color:var(--text-faint);font-size:11.5px;margin-top:8px;}
+
+  /* pool cards */
+  .imbc-pool{border:1px solid var(--line);border-radius:9px;margin-bottom:12px;overflow:hidden;}
+  .imbc-pool-head{padding:13px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:var(--bg-raised);}
+  .imbc-pool-attrs{display:flex;gap:16px;flex-wrap:wrap;align-items:baseline;}
+  .imbc-attr{font-size:12px;}
+  .imbc-attr .k{color:var(--text-faint);margin-right:4px;}
+  .imbc-attr .v{color:var(--text);font-weight:500;}
+  .imbc-chevron{color:var(--text-faint);transition:transform .15s;font-size:12px;}
+  .imbc-pool-body{padding:14px 16px 16px;border-top:1px solid var(--line-soft);}
+
+  .imbc-flowrow{display:grid;grid-template-columns:110px 1fr 300px;gap:16px;align-items:center;padding:10px 0;}
+  .imbc-flowrow + .imbc-flowrow{border-top:1px solid var(--line-soft);}
+  .imbc-flow-label{font-size:12.5px;font-weight:600;color:var(--text-dim);}
+  .imbc-gauge{height:8px;border-radius:4px;background:var(--bg);position:relative;overflow:hidden;border:1px solid var(--line-soft);}
+  .imbc-gauge-fill{height:100%;background:linear-gradient(90deg,var(--teal-dim),var(--teal));border-radius:4px 0 0 4px;}
+  .imbc-gauge-fill.neg{background:linear-gradient(90deg,#7A2E24,var(--red));}
+  .imbc-flow-nums{display:flex;gap:14px;justify-content:flex-end;font-size:11.5px;}
+  .imbc-flow-nums div{text-align:right;}
+  .imbc-flow-nums .n{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;display:block;}
+  .imbc-flow-nums .l{color:var(--text-faint);font-size:10px;text-transform:uppercase;}
+
+  .imbc-badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;}
+  .imbc-badge.ok{background:rgba(51,165,133,0.15);color:var(--teal);}
+  .imbc-badge.warn{background:rgba(219,107,88,0.15);color:var(--red);}
+
+  /* tables */
+  table.imbc-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.imbc-table th{text-align:left;color:var(--text-faint);font-weight:500;text-transform:uppercase;font-size:10.5px;letter-spacing:.05em;padding:7px 8px;border-bottom:1px solid var(--line);}
+  table.imbc-table td{padding:8px 8px;border-bottom:1px solid var(--line-soft);}
+  table.imbc-table tr:last-child td{border-bottom:none;}
+  table.imbc-table td.num,table.imbc-table th.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .imbc-tag-in{color:var(--teal);}
+  .imbc-tag-out{color:var(--amber);}
+  .imbc-tag-conv{color:#7CA6E8;}
+  .imbc-del{color:var(--text-faint);cursor:pointer;font-size:11px;}
+  .imbc-del:hover{color:var(--red);}
+
+  .imbc-empty{text-align:center;padding:40px 20px;color:var(--text-faint);font-size:13px;}
+  .imbc-empty svg{opacity:.4;margin-bottom:10px;}
+
+  .imbc-quarter-block{margin-bottom:10px;}
+  .imbc-quarter-block h4{font-size:12px;color:var(--text-dim);margin-bottom:6px;font-family:'IBM Plex Mono',monospace;}
+
+  select#imbc-sale-pool{width:100%;}
+
+  ::placeholder{color:var(--text-faint);}
+</style>
+
+<div id="imbc-root">
+  <div class="imbc-shell">
+    <div class="imbc-header">
+      <div class="imbc-title-block">
+        <div class="imbc-mark">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12h4l2-6 4 12 2-6h4" stroke="#08120F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <div class="imbc-title">ISCC Mass Balance Ledger</div>
+          <div class="imbc-subtitle">Biomethane &amp; BioLNG &mdash; pooled stock, conversions &amp; 3&#8209;month reconciliation</div>
+        </div>
+      </div>
+      <div class="imbc-header-stats">
+        <div class="imbc-hstat"><div class="n" id="imbc-stat-pools">0</div><div class="l">Pools</div></div>
+        <div class="imbc-hstat"><div class="n" id="imbc-stat-bm">0</div><div class="l">Biomethane bal.</div></div>
+        <div class="imbc-hstat"><div class="n" id="imbc-stat-lng">0</div><div class="l">BioLNG bal.</div></div>
+        <div class="imbc-hstat"><div class="n" id="imbc-stat-alerts">0</div><div class="l">Alerts</div></div>
+      </div>
+    </div>
+
+    <div class="imbc-tabs">
+      <div class="imbc-tab active" data-tab="entry">Record Transaction</div>
+      <div class="imbc-tab" data-tab="pools">Pools &amp; Balances</div>
+      <div class="imbc-tab" data-tab="log">Transaction Log</div>
+      <div class="imbc-tab" data-tab="recon">Quarterly Reconciliation</div>
+    </div>
+
+    <div id="imbc-tab-entry" class="imbc-tabcontent"></div>
+    <div id="imbc-tab-pools" class="imbc-tabcontent" style="display:none"></div>
+    <div id="imbc-tab-log" class="imbc-tabcontent" style="display:none"></div>
+    <div id="imbc-tab-recon" class="imbc-tabcontent" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const root = document.getElementById('imbc-root');
+  const FEEDSTOCKS = ["Manure","Sewage sludge","Municipal solid waste (biogenic)","Agricultural residues (straw)","Maize / energy crop","Used cooking oil","Animal fats (Cat 1/2)","Forestry residues","Landfill gas feed","Palm Oil Mill Effluent (POME)","Other"];
+  const CERT_TYPES = ["ISCC EU","ISCC PLUS","ISCC CORSIA"];
+  const COUNTRIES = ["Malaysia","Indonesia","Netherlands","Germany","Denmark","France","United Kingdom","Spain","Italy","Poland","Thailand","Vietnam","China","United States","Brazil"];
+
+  let state = { transactions: [] };
+  let activeTab = 'entry';
+  let txType = 'Incoming';
+  let convDir = 'BM_TO_LNG';
+  let saveTimer = null;
+
+  const STORAGE_KEY = 'iscc_mb_transactions_v1';
+
+  async function loadState(){
+    try{
+      const res = await window.storage.get(STORAGE_KEY, false);
+      if(res && res.value){
+        const parsed = JSON.parse(res.value);
+        if(Array.isArray(parsed.transactions)) state.transactions = parsed.transactions;
+      }
+    }catch(e){ /* no saved data yet */ }
+    renderAll();
+  }
+
+  function persist(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async ()=>{
+      try{ await window.storage.set(STORAGE_KEY, JSON.stringify(state), false); }
+      catch(e){ console.error('save failed', e); }
+    }, 250);
+  }
+
+  function uid(){ return 'tx_' + Math.random().toString(36).slice(2,10); }
+  function fmt(n){ return (Math.round(n*1000)/1000).toLocaleString(undefined,{maximumFractionDigits:3}); }
+  function ghgBucket(g){ return Math.round(parseFloat(g)*10)/10; }
+  function poolKey(t){ return [t.certScheme, t.feedstockType, t.countryOfOrigin, ghgBucket(t.ghgEmission)].join('||'); }
+
+  function quarterOf(dateStr){
+    const d = new Date(dateStr);
+    const q = Math.floor(d.getMonth()/3)+1;
+    return d.getFullYear()+'-Q'+q;
+  }
+  function quarterSort(a,b){
+    const [ya,qa]=a.split('-Q').map(Number), [yb,qb]=b.split('-Q').map(Number);
+    return ya!==yb ? ya-yb : qa-qb;
+  }
+
+  // ---------- derive pools ----------
+  function computePools(){
+    const pools = {};
+    for(const t of state.transactions){
+      const key = poolKey(t);
+      if(!pools[key]){
+        pools[key] = {
+          key, certScheme:t.certScheme, feedstockType:t.feedstockType, countryOfOrigin:t.countryOfOrigin, ghg: ghgBucket(t.ghgEmission),
+          products:{ Biomethane:{ in:0,out:0,convIn:0,convOut:0,balance:0 }, BioLNG:{ in:0,out:0,convIn:0,convOut:0,balance:0 } },
+          txs:[]
+        };
+      }
+      pools[key].txs.push(t);
+    }
+    for(const key in pools){
+      const p = pools[key];
+      // sort chronologically for correct running behaviour
+      p.txs.sort((a,b)=> new Date(a.date) - new Date(b.date));
+      for(const t of p.txs){
+        const bucket = p.products[t.productType];
+        if(!bucket) continue;
+        if(t.transactionType==='Incoming') bucket.in += t.volume;
+        else if(t.transactionType==='Outgoing') bucket.out += t.volume;
+        else if(t.transactionType==='Conversion'){
+          // t.volume = source volume deducted from t.productType; t.convertedVolume added to t.convertedTo
+          bucket.convOut += t.volume;
+          const target = p.products[t.convertedTo];
+          if(target) target.convIn += t.convertedVolume;
+        }
+      }
+      for(const pt of ['Biomethane','BioLNG']){
+        const b = p.products[pt];
+        b.balance = b.in + b.convIn - b.out - b.convOut;
+      }
+    }
+    return pools;
+  }
+
+  function poolLabel(p){
+    return `${p.feedstockType} &middot; ${p.countryOfOrigin} &middot; ${p.ghg} gCO2eq/MJ`;
+  }
+
+  // ---------- rendering ----------
+  function renderAll(){
+    renderHeaderStats();
+    renderEntryTab();
+    renderPoolsTab();
+    renderLogTab();
+    renderReconTab();
+  }
+
+  function renderHeaderStats(){
+    const pools = computePools();
+    const keys = Object.keys(pools);
+    let bm=0, lng=0, alerts=0;
+    keys.forEach(k=>{
+      const p = pools[k];
+      bm += p.products.Biomethane.balance;
+      lng += p.products.BioLNG.balance;
+      if(p.products.Biomethane.balance < -0.0001 || p.products.BioLNG.balance < -0.0001) alerts++;
+    });
+    document.getElementById('imbc-stat-pools').textContent = keys.length;
+    document.getElementById('imbc-stat-bm').textContent = fmt(bm);
+    document.getElementById('imbc-stat-lng').textContent = fmt(lng);
+    document.getElementById('imbc-stat-alerts').textContent = alerts;
+  }
+
+  function renderEntryTab(){
+    const el = document.getElementById('imbc-tab-entry');
+    const pools = computePools();
+    const poolOptions = Object.values(pools).map(p=>{
+      const bmBal = fmt(p.products.Biomethane.balance);
+      const lngBal = fmt(p.products.BioLNG.balance);
+      return `<option value="${p.key}">[${p.certScheme}] ${p.feedstockType} / ${p.countryOfOrigin} / GHG ${p.ghg} &mdash; BM:${bmBal} | LNG:${lngBal}</option>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="imbc-panel">
+        <h2>New transaction</h2>
+        <div class="imbc-panel-sub">Capture an incoming supply, outgoing sale/delivery, or an internal conversion between Biomethane and BioLNG.</div>
+
+        <div class="imbc-radio-row" style="margin-bottom:16px;max-width:420px;">
+          <div class="imbc-radio-opt ${txType==='Incoming'?'sel':''}" data-settype="Incoming">Incoming</div>
+          <div class="imbc-radio-opt ${txType==='Outgoing'?'sel out':''}" data-settype="Outgoing">Outgoing</div>
+          <div class="imbc-radio-opt ${txType==='Conversion'?'sel conv':''}" data-settype="Conversion">Conversion</div>
+        </div>
+
+        <div id="imbc-entry-form"></div>
+        <div id="imbc-entry-error" class="imbc-error"></div>
+      </div>
+    `;
+
+    const formEl = document.getElementById('imbc-entry-form');
+
+    if(txType==='Incoming' || txType==='Outgoing'){
+      formEl.innerHTML = `
+        <div class="imbc-form-grid">
+          <div class="imbc-field span2">
+            <label>${txType==='Incoming'?'Supplier name':'Buyer name'}</label>
+            <input id="f-partyName" placeholder="e.g. Greenline Biogas Sdn Bhd"/>
+          </div>
+          <div class="imbc-field">
+            <label>${txType==='Incoming'?'Supplier cert. no.':'Buyer cert. no.'}</label>
+            <input id="f-certNumber" placeholder="ISCC-EU-xxxxxx"/>
+          </div>
+          <div class="imbc-field">
+            <label>Date ${txType==='Incoming'?'received':'delivered'}</label>
+            <input id="f-date" type="date"/>
+          </div>
+          <div class="imbc-field">
+            <label>ISCC certification</label>
+            <select id="f-certScheme">${CERT_TYPES.map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
+          </div>
+
+          <div class="imbc-field">
+            <label>Product type</label>
+            <select id="f-productType">
+              <option value="Biomethane">Biomethane</option>
+              <option value="BioLNG">BioLNG</option>
+            </select>
+          </div>
+          <div class="imbc-field">
+            <label>Volume ${txType==='Incoming'?'(Nm&sup3; / MT)':''}</label>
+            <input id="f-volume" type="number" step="any" min="0" placeholder="0.00"/>
+          </div>
+          <div class="imbc-field">
+            <label>GHG emission (gCO2eq/MJ)</label>
+            <input id="f-ghg" type="number" step="any" placeholder="e.g. 12.4"/>
+          </div>
+          <div class="imbc-field">
+            <label>Feedstock type</label>
+            <select id="f-feedstock">${FEEDSTOCKS.map(f=>`<option value="${f}">${f}</option>`).join('')}</select>
+          </div>
+
+          <div class="imbc-field span2">
+            <label>Country of origin</label>
+            <input id="f-country" list="imbc-country-list" placeholder="e.g. Malaysia"/>
+            <datalist id="imbc-country-list">${COUNTRIES.map(c=>`<option value="${c}">`).join('')}</datalist>
+          </div>
+
+          ${txType==='Outgoing' ? `
+          <div class="imbc-field span2">
+            <label>Select stock pool to deliver from</label>
+            <select id="imbc-sale-pool"><option value="">— choose a matching pool —</option>${poolOptions}</select>
+          </div>` : ''}
+        </div>
+        <div class="imbc-hint">${txType==='Outgoing' ? 'Country / feedstock / GHG fields above will auto-fill from the pool you select, and volume is capped at that pool\'s available balance.' : 'This transaction will be pooled with any existing stock sharing the same feedstock type, country of origin, and GHG emission value.'}</div>
+        <div style="margin-top:14px;"><button class="imbc-btn" id="imbc-submit-btn">Add ${txType.toLowerCase()} transaction</button></div>
+      `;
+
+      if(txType==='Outgoing'){
+        const saleSelect = document.getElementById('imbc-sale-pool');
+        saleSelect.addEventListener('change', ()=>{
+          const key = saleSelect.value;
+          if(!key) return;
+          const p = pools[key];
+          document.getElementById('f-country').value = p.countryOfOrigin;
+          document.getElementById('f-ghg').value = p.ghg;
+          document.getElementById('f-feedstock').value = p.feedstockType;
+          document.getElementById('f-certScheme').value = p.certScheme;
+        });
+      }
+
+      document.getElementById('imbc-submit-btn').addEventListener('click', ()=>{
+        submitInOut(pools);
+      });
+
+    } else {
+      // Conversion form
+      formEl.innerHTML = `
+        <div class="imbc-radio-row" style="max-width:420px;margin-bottom:14px;">
+          <div class="imbc-radio-opt conv ${convDir==='BM_TO_LNG'?'sel conv':''}" data-convdir="BM_TO_LNG">Biomethane &rarr; BioLNG</div>
+          <div class="imbc-radio-opt conv ${convDir==='LNG_TO_BM'?'sel conv':''}" data-convdir="LNG_TO_BM">BioLNG &rarr; Biomethane</div>
+        </div>
+        <div class="imbc-form-grid">
+          <div class="imbc-field span2">
+            <label>Select stock pool to convert</label>
+            <select id="imbc-conv-pool"><option value="">— choose a matching pool —</option>${poolOptions}</select>
+          </div>
+          <div class="imbc-field">
+            <label>Date of conversion</label>
+            <input id="f-date" type="date"/>
+          </div>
+          <div class="imbc-field">
+            <label>Source volume to convert</label>
+            <input id="f-volume" type="number" step="any" min="0" placeholder="0.00"/>
+          </div>
+          <div class="imbc-field">
+            <label>Conversion factor</label>
+            <input id="f-factor" type="number" step="any" min="0" value="1"/>
+          </div>
+          <div class="imbc-field">
+            <label>Resulting volume</label>
+            <input id="f-resultVolume" type="text" disabled placeholder="auto-calculated"/>
+          </div>
+        </div>
+        <div class="imbc-hint">Enter the mass/energy conversion factor that applies to your gas composition (target volume = source volume &times; factor). Verify the correct GCV-based factor with your ISCC auditor &mdash; this tool does not assume a fixed default.</div>
+        <div style="margin-top:14px;"><button class="imbc-btn" id="imbc-submit-btn">Record conversion</button></div>
+      `;
+
+      const volInput = document.getElementById('f-volume');
+      const factorInput = document.getElementById('f-factor');
+      const resultInput = document.getElementById('f-resultVolume');
+      function updateResult(){
+        const v = parseFloat(volInput.value)||0;
+        const f = parseFloat(factorInput.value)||0;
+        resultInput.value = fmt(v*f);
+      }
+      volInput.addEventListener('input', updateResult);
+      factorInput.addEventListener('input', updateResult);
+
+      root.querySelectorAll('[data-convdir]').forEach(elm=>{
+        elm.addEventListener('click', ()=>{ convDir = elm.getAttribute('data-convdir'); renderEntryTab(); });
+      });
+
+      document.getElementById('imbc-submit-btn').addEventListener('click', ()=>{
+        submitConversion(pools);
+      });
+    }
+
+    root.querySelectorAll('[data-settype]').forEach(elm=>{
+      elm.addEventListener('click', ()=>{ txType = elm.getAttribute('data-settype'); renderEntryTab(); });
+    });
+  }
+
+  function showError(msg){
+    document.getElementById('imbc-entry-error').textContent = msg;
+  }
+
+  function readCommon(){
+    return {
+      partyName: document.getElementById('f-partyName').value.trim(),
+      certNumber: document.getElementById('f-certNumber').value.trim(),
+      certScheme: document.getElementById('f-certScheme').value,
+      date: document.getElementById('f-date').value,
+      productType: document.getElementById('f-productType').value,
+      volume: parseFloat(document.getElementById('f-volume').value),
+      ghgEmission: parseFloat(document.getElementById('f-ghg').value),
+      feedstockType: document.getElementById('f-feedstock').value,
+      countryOfOrigin: document.getElementById('f-country').value.trim(),
+    };
+  }
+
+  function submitInOut(pools){
+    const d = readCommon();
+    if(!d.partyName || !d.date || isNaN(d.volume) || d.volume<=0 || isNaN(d.ghgEmission) || !d.countryOfOrigin){
+      showError('Please fill in all required fields with a positive volume.');
+      return;
+    }
+    if(txType==='Outgoing'){
+      const key = [d.certScheme, d.feedstockType, d.countryOfOrigin, ghgBucket(d.ghgEmission)].join('||');
+      const p = pools[key];
+      const available = p ? p.products[d.productType].balance : 0;
+      if(d.volume > available + 1e-9){
+        showError(`Outgoing volume exceeds available ${d.productType} balance for this pool (${fmt(available)} available). Outgoing stock cannot exceed what is on hand.`);
+        return;
+      }
+    }
+    state.transactions.push(Object.assign({ id: uid(), transactionType: txType }, d));
+    persist();
+    showError('');
+    renderAll();
+  }
+
+  function submitConversion(pools){
+    const key = document.getElementById('imbc-conv-pool').value;
+    const date = document.getElementById('f-date').value;
+    const volume = parseFloat(document.getElementById('f-volume').value);
+    const factor = parseFloat(document.getElementById('f-factor').value);
+    if(!key){ showError('Select a stock pool to convert.'); return; }
+    if(!date || isNaN(volume) || volume<=0 || isNaN(factor) || factor<=0){
+      showError('Please fill in date, a positive source volume, and a positive conversion factor.');
+      return;
+    }
+    const p = pools[key];
+    const sourceProduct = convDir==='BM_TO_LNG' ? 'Biomethane' : 'BioLNG';
+    const targetProduct = convDir==='BM_TO_LNG' ? 'BioLNG' : 'Biomethane';
+    const available = p.products[sourceProduct].balance;
+    if(volume > available + 1e-9){
+      showError(`Conversion volume exceeds available ${sourceProduct} balance for this pool (${fmt(available)} available).`);
+      return;
+    }
+    state.transactions.push({
+      id: uid(), transactionType:'Conversion', date,
+      partyName:'Internal conversion', certNumber:'', productType: sourceProduct,
+      volume, convertedTo: targetProduct, convertedVolume: volume*factor, conversionFactor: factor,
+      ghgEmission: p.ghg, feedstockType: p.feedstockType, countryOfOrigin: p.countryOfOrigin, certScheme: p.certScheme,
+    });
+    persist();
+    showError('');
+    renderAll();
+  }
+
+  function deleteTx(id){
+    state.transactions = state.transactions.filter(t=>t.id!==id);
+    persist();
+    renderAll();
+  }
+
+  function renderPoolsTab(){
+    const el = document.getElementById('imbc-tab-pools');
+    const pools = Object.values(computePools());
+    if(pools.length===0){
+      el.innerHTML = emptyState('No pools yet', 'Record an incoming transaction to create the first stock pool.');
+      return;
+    }
+    el.innerHTML = pools.map(p=>{
+      const bm = p.products.Biomethane, lng = p.products.BioLNG;
+      const alert = bm.balance < -0.0001 || lng.balance < -0.0001;
+      return `
+      <div class="imbc-pool">
+        <div class="imbc-pool-head">
+          <div class="imbc-pool-attrs">
+            <div class="imbc-attr"><span class="k">Scheme</span><span class="v">${p.certScheme}</span></div>
+            <div class="imbc-attr"><span class="k">Feedstock</span><span class="v">${p.feedstockType}</span></div>
+            <div class="imbc-attr"><span class="k">Origin</span><span class="v">${p.countryOfOrigin}</span></div>
+            <div class="imbc-attr"><span class="k">GHG</span><span class="v">${p.ghg} gCO2eq/MJ</span></div>
+            ${alert ? '<span class="imbc-badge warn">Balance alert</span>' : '<span class="imbc-badge ok">Balanced</span>'}
+          </div>
+        </div>
+        <div class="imbc-pool-body">
+          ${flowRow('Biomethane', bm)}
+          ${flowRow('BioLNG', lng)}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function flowRow(label, b){
+    const total = b.in + b.convIn;
+    const usedPct = total>0 ? Math.min(100, ((b.out+b.convOut)/total)*100) : 0;
+    const neg = b.balance < -0.0001;
+    return `
+      <div class="imbc-flowrow">
+        <div class="imbc-flow-label">${label}</div>
+        <div class="imbc-gauge"><div class="imbc-gauge-fill ${neg?'neg':''}" style="width:${neg?100:Math.max(2,100-usedPct)}%"></div></div>
+        <div class="imbc-flow-nums">
+          <div><span class="n">${fmt(b.in+b.convIn)}</span><span class="l">In</span></div>
+          <div><span class="n">${fmt(b.out+b.convOut)}</span><span class="l">Out</span></div>
+          <div><span class="n" style="color:${neg?'var(--red)':'var(--teal)'}">${fmt(b.balance)}</span><span class="l">Balance</span></div>
+        </div>
+      </div>`;
+  }
+
+  function renderLogTab(){
+    const el = document.getElementById('imbc-tab-log');
+    const txs = [...state.transactions].sort((a,b)=> new Date(b.date)-new Date(a.date));
+    if(txs.length===0){
+      el.innerHTML = emptyState('No transactions logged', 'Transactions you record will appear here.');
+      return;
+    }
+    el.innerHTML = `
+      <div class="imbc-panel">
+        <h2>Full transaction log</h2>
+        <div class="imbc-panel-sub">${txs.length} transaction${txs.length===1?'':'s'} recorded</div>
+        <table class="imbc-table">
+          <thead><tr>
+            <th>Date</th><th>Type</th><th>Party</th><th>Scheme</th><th>Cert. no.</th><th>Product</th>
+            <th class="num">Volume</th><th>Feedstock</th><th>Origin</th><th class="num">GHG</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${txs.map(t=>`
+              <tr>
+                <td>${t.date}</td>
+                <td class="${t.transactionType==='Incoming'?'imbc-tag-in':t.transactionType==='Outgoing'?'imbc-tag-out':'imbc-tag-conv'}">${t.transactionType}</td>
+                <td>${t.partyName}</td>
+                <td>${t.certScheme||'&mdash;'}</td>
+                <td>${t.certNumber||'&mdash;'}</td>
+                <td>${t.transactionType==='Conversion' ? `${t.productType} &rarr; ${t.convertedTo}` : t.productType}</td>
+                <td class="num">${t.transactionType==='Conversion' ? `${fmt(t.volume)} &rarr; ${fmt(t.convertedVolume)}` : fmt(t.volume)}</td>
+                <td>${t.feedstockType}</td>
+                <td>${t.countryOfOrigin}</td>
+                <td class="num">${t.ghgEmission}</td>
+                <td><span class="imbc-del" data-delid="${t.id}">remove</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    el.querySelectorAll('[data-delid]').forEach(elm=>{
+      elm.addEventListener('click', ()=> deleteTx(elm.getAttribute('data-delid')));
+    });
+  }
+
+  function renderReconTab(){
+    const el = document.getElementById('imbc-tab-recon');
+    const pools = Object.values(computePools());
+    if(pools.length===0){
+      el.innerHTML = emptyState('Nothing to reconcile yet', 'Quarterly incoming/outgoing balances will show here once transactions exist.');
+      return;
+    }
+    el.innerHTML = `<div class="imbc-panel"><div class="imbc-panel-sub" style="margin-bottom:16px;">ISCC requires stock to reconcile within a rolling 3&#8209;month (quarterly) period, with the running balance never going negative. Confirm the exact reconciliation-window definition (fixed calendar quarter vs. rolling window) with your certification body &mdash; this view uses calendar quarters.</div>` +
+      pools.map(p=>{
+        return `<div style="margin-bottom:22px;">
+          <h3 style="font-size:13px;margin-bottom:10px;">[${p.certScheme}] ${p.feedstockType} &middot; ${p.countryOfOrigin} &middot; GHG ${p.ghg}</h3>
+          ${['Biomethane','BioLNG'].map(pt=> renderQuarterTable(p, pt)).join('')}
+        </div>`;
+      }).join('') + `</div>`;
+  }
+
+  function renderQuarterTable(pool, productType){
+    const txs = pool.txs.filter(t=> t.productType===productType || t.convertedTo===productType);
+    if(txs.length===0) return '';
+    const quarters = [...new Set(txs.map(t=>quarterOf(t.date)))].sort(quarterSort);
+    let running = 0;
+    const rows = quarters.map(q=>{
+      let qIn=0, qOut=0, qConvIn=0, qConvOut=0;
+      txs.forEach(t=>{
+        if(quarterOf(t.date)!==q) return;
+        if(t.transactionType==='Incoming' && t.productType===productType) qIn += t.volume;
+        else if(t.transactionType==='Outgoing' && t.productType===productType) qOut += t.volume;
+        else if(t.transactionType==='Conversion'){
+          if(t.productType===productType) qConvOut += t.volume;
+          if(t.convertedTo===productType) qConvIn += t.convertedVolume;
+        }
+      });
+      const net = qIn + qConvIn - qOut - qConvOut;
+      running += net;
+      const neg = running < -0.0001;
+      return `<tr>
+        <td class="mono">${q}</td>
+        <td class="num">${fmt(qIn+qConvIn)}</td>
+        <td class="num">${fmt(qOut+qConvOut)}</td>
+        <td class="num">${fmt(net)}</td>
+        <td class="num" style="color:${neg?'var(--red)':'var(--teal)'}">${fmt(running)}</td>
+        <td>${neg ? '<span class="imbc-badge warn">Negative</span>' : '<span class="imbc-badge ok">OK</span>'}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <div class="imbc-quarter-block">
+        <h4>${productType}</h4>
+        <table class="imbc-table">
+          <thead><tr><th>Quarter</th><th class="num">In</th><th class="num">Out</th><th class="num">Net</th><th class="num">Cumulative</th><th>Status</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function emptyState(title, sub){
+    return `<div class="imbc-panel"><div class="imbc-empty">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12h4l2-6 4 12 2-6h4" stroke="#5E7A72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div style="font-weight:600;color:var(--text-dim);margin-bottom:4px;">${title}</div>
+      <div>${sub}</div>
+    </div></div>`;
+  }
+
+  // ---------- tabs ----------
+  root.querySelectorAll('.imbc-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      activeTab = tab.getAttribute('data-tab');
+      root.querySelectorAll('.imbc-tab').forEach(t=>t.classList.toggle('active', t===tab));
+      root.querySelectorAll('.imbc-tabcontent').forEach(c=> c.style.display='none');
+      document.getElementById('imbc-tab-'+activeTab).style.display='block';
+    });
+  });
+
+  loadState();
+})();
+</script>

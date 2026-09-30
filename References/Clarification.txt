@@ -1,0 +1,175 @@
+﻿1. Which mass-balance method is KHPB actually certified under — attribution by mass, attribution by energy, or the credit method? The app currently uses one fixed formula that was never verified against our real certificate.
+
+
+At the moment, most of the company is using Credit Methodology to keep their Mass Balance. The Attribution by Energy and Mass is something that we may want to develop/explore later (perhaps can be a placeholder first), but at the moment, only the Credit Method is crucial.
+
+
+2. Should GHG value be a single number, or does it need the full breakdown (eec, el, ep, etd, eu, esca, eccs, eccr) plus the Disaggregated vs. Default toggle and transport info? Right now it's just one placeholder number.
+
+In the Mass Balance bookkeeping, the GHG will be recorded only as a single reference number as prepared by the supplier. However, it would be useful to capture if the supplier is giving the figure based on either: Disaggregate Default Value (DDV), Default Value (DV) or Actual Value (AV). Perhaps when the user records their input into the mass balance table, they may select the type of GHG inputs provided by their suppliers.
+
+3. Does "compensation of input characteristics" apply to KHPB, and is it the same as "take the max GHG value on merge" (what's built now), or something different that's missing?
+
+Indeed, the compensation of input characteristics applied in the Mass Balance record because the volume is assumed to be certified (when they have positive mass balance stock) to compensate the non-certified portion during the production/processing.
+For the GHG options, let's take the approach to allow the user to select the options, whether they would like to use the highest GHG value in their shipments, or using the actual value associated with their current Mass Balance stock.
+
+4. Does our biomethane (from POME) need a category prefix like "bio-circular" on the product? There's no field for this yet.
+
+The term Bio-Circular is only applicable specifically for ISCC PLUS material. For ISCC EU, the material category should be marked as Waste and Residues. 
+For reference:
+* ISCC PLUS Raw Material Category:
+   * Circular 
+   * Bio-Circular
+   * Bio 
+   * Renewable energy-derived
+Note: For bio-circular materials, the ledger and corresponding Sustainability Declarations must include the raw material category, the waste status (e.g., pre-consumer, post-consumer, or mixed), and the claim "ISCC Compliant".
+   * ISCC EU material classification:
+   * Annex IX Part A Feedstocks
+   * Annex IX Part B Feedstocks
+   * Other / Unclassified Sustainable Feedstocks
+   * Waste & Residues
+But, for both ISCC EU and PLUS, it must include the Country of Origin (of the raw material).
+
+
+Type of Raw Materials:
+   * ISCC EU: ISCC_EU_material_list_2026_July.pdf 
+   	* Palm oil mill effluent (POME)*
+   	* Palm oil mill effluent (POME) Oil*
+
+   * ISCC PLUS: ISCC_PLUS_material_list_Aug_26-2.pdf
+
+5. The 2025–2026 worksheet reports grid supply in MMBtu/MT instead of m³, which breaks the ledger. What's the correct conversion factor?
+
+
+The correct units for reporting in the Sustainability Declaration
+      * ISCC EU:
+      * m3
+      * Metric Tons
+      * For ISCC PLUS:
+      * mt
+      * kg
+      * m3/15C
+      * J
+      * kWh
+
+
+6. Should closing balance auto-carry into the next period's opening inventory instead of manual re-entry?
+
+
+Yes. It should be automatically carry over. However, for ISCC EU, it must be validated based on the Physical Material in stock. They can only carry the volume that matches the Physical Stock (for ISCC EU), whichever is lower.
+
+
+7. Is there a required cadence for physical stock readings, or is ad hoc fine?
+
+
+Not sure, require clarification.
+
+
+8. For audits, does the scanned weighbridge ticket/delivery note need to be attached, or is a reference number enough?
+
+
+The idea (can be in the next phase) to have AI reading tools to extract the information from the Sustainability Declaration (SD). Bear in mind that the ISCC EU and PLUS have different templates of SDs.
+
+
+9. Should COMPANY_USER access be restricted to specific sites? It's not enforced currently.
+
+
+Yes. The hierarchy will be like this
+      1. Top Level: The Certification Manager - normally at HQ level (Super Admin)
+      1. Can add/remove user for ALL Site
+      2. Can manage and monitor the Mass Balance data for ALL sites
+      3. Can download the full report
+      4. Can see overall dashboards for all sites
+      2. Second Level: The Certification Executive (Site A) - (Admin)
+      1. Can add/remove use for the specific Site ONLY
+      2. Can manage and monitor the Mass Balance data for specific sites only
+      3. Can download the report for specific sites only
+      4. Can see dashboard for specific sites only
+      3. Third Level: The Clerk (Site A) - (System User)
+      1. Can manage and monitor the Mass Balance data for specific sites only
+      2. Can download the report for specific sites only
+      3. Can see dashboard for specific sites only
+
+
+10. How different is our data/setup compared to other companies you've certified under ISCC PLUS — is there anything about KHPB's records or process that stands out as unusual?
+
+
+Basically, KHPB is a very short and straightforward case. Just in and out. However, for the case that we are developing in the platform now, it is more comprehensive, as in the stock can move from EU to PLUS, and can allocate to tolling.
+
+
+________________
+
+
+For crosschecking of the Mass Balance tools:
+1. Scheme-Specific and Scope-Specific Ledgers
+      * Separate by Scheme and Scope: PEGT must maintain separate mass balance accounting and calculations for each certified scope (e.g., Trader with Storage, Processing Unit). The ledgers must keep mass balances separate for different materials, sites, and certification scopes, meaning ISCC EU and ISCC PLUS transactions cannot be mixed in the same ledger.
+      * Clear Documentation: The mass balance must transparently document monthly inputs, outputs, and physical stock. Sustainable and non-sustainable materials must be clearly separated within the bookkeeping.
+2. Strict Site-Specific Segregation
+      * Geographical Boundaries: Both ISCC EU and ISCC PLUS mandate that mass balance bookkeeping and calculations must be strictly site-specific.
+      * Individual Locations: PEGT must keep a separate quantity bookkeeping (e.g., mass balance ledger) for every individual storage location or processing site used. It is not permitted to aggregate mass balances across different geographical locations.
+      * Multiple Legal Entities: If more than one legal entity operates at a single location, each legal entity is required to operate its own separate mass balance bookkeeping.
+
+
+3. Material Segregation Rules
+      * ISCC EU (Annex IX Materials): Different raw materials must be kept separately in the mass balance. Materials can only be grouped into a single "product group" if they share similar physical and chemical characteristics, possess similar heating values, and fall under the exact same RED III category (e.g., Annex IX Part A or Annex IX Part B).
+      * ISCC PLUS (Bio-Circular Materials): The mass balance must be kept material-specific, indicating the respective raw material. Furthermore, different raw material categories (e.g., bio, bio-circular, circular, renewable) must be kept completely separate within the mass balance calculation.
+4. Characteristics and Claims Assignment
+      * Unique Assignment: The bookkeeping must allow sets of sustainability characteristics to be uniquely identified and assigned to individual incoming and outgoing batches. These sets of characteristics must not be split.
+      * ISCC EU Data: For Annex IX materials, the ledger must retain information such as the country of origin, the RED III waste/residue definition, and GHG emissions values. Different GHG values cannot be aggregated. However, the highest (least performing) GHG emission value among incoming batches with identical characteristics can be applied consistently to all of those batches.
+      * ISCC PLUS Data: For bio-circular materials, the ledger and corresponding Sustainability Declarations must include the raw material category, the waste status (e.g., pre-consumer, post-consumer, or mixed), and the claim "ISCC Compliant".
+5. Managing Credits and Deficits
+      * Zero Deficits: A negative balance of credits is strictly prohibited under both ISCC EU and ISCC PLUS. At no point can PEGT withdraw more sustainable material than what was added, including the existing inventory at the start of the period.
+      * ISCC EU Carry-Overs: Positive credits for ISCC EU materials can only be transferred to the next mass balance period if an equivalent amount of physical material is physically available in stock.
+      * ISCC PLUS Credit Transfers: Processing units and storage facilities certified under ISCC PLUS are permitted to transfer credits between different sites. This is only allowed if the supplier and recipient of the credits are part of the same company or corporate group, the sites are located within national borders or neighboring countries, and the transfer applies to the same kind of outgoing product.
+
+
+
+
+________________
+
+
+To ensure your digital platform complies with all ISCC mass balance and quantity bookkeeping rules, it must be architected to handle strict geographical boundaries, prevent deficits, and manage the distinct credit carryover rules between ISCC EU and ISCC PLUS.
+
+
+Here is the comprehensive compliance checklist for your system's development:
+
+
+1. System Architecture & Ledger Segregation
+Your database architecture must prevent the co-mingling of data that ISCC requires to be kept separate.
+      * Site-Specific Boundaries: The system must generate and maintain separate mass balance ledgers for every individual geographical location, storage facility, or interconnected grid. Aggregating mass balances across different geographic sites is strictly prohibited.
+      * Scope Segregation: The platform must separate ledgers based on the certified scope (e.g., a "Trader with Storage" ledger must be distinct from a "Processing Unit" ledger).
+      * Scheme Isolation: ISCC EU and ISCC PLUS ledgers must be completely segregated; the system logic must block any transfer of credits from an ISCC PLUS balance into an ISCC EU balance.
+      * Material Categorization (ISCC PLUS): For ISCC PLUS, the system must separate raw material categories (Bio, Bio-circular, Circular, Renewable-energy-derived) within the ledger.
+      * Product Grouping (ISCC EU): For ISCC EU, the system must keep different raw materials separate unless they meet the strict criteria for a "product group" (sharing similar physical and chemical characteristics, similar heating values, and the exact same RED III category).
+2. Data Intake & Batch Verification
+The platform must act as the gatekeeper for all incoming sustainable material.
+      * Physical Linkage: The system must require every virtual sustainable batch entry to be linked to a physical receipt document (e.g., weighbridge ticket, pipeline nomination, or bill of lading).
+      * Sustainability Characteristics: The system must capture all mandatory fields from incoming Sustainability Declarations (SDs), including raw material type, country of origin, and Greenhouse Gas (GHG) emission values.
+      * No Averaging of Characteristics: When batches with different sustainability characteristics are physically mixed, the database must maintain them as distinct rows or subsets; the system cannot average differing GHG values.
+      * Worst-Case GHG Option: If multiple incoming batches have different GHG values but are otherwise identical, the system logic may allow users to apply the highest (worst-performing) GHG value across all those specific batches to simplify bookkeeping.
+
+
+
+
+3. Processing & Conversion Engine
+If the platform is used by a Processing Unit, it must accurately calculate how much output can be claimed as certified.
+      * Operational Conversion Factors: The system must require the input of site-specific conversion factors (CF) based on actual operational data to account for yields and process losses.
+      * Output Calculation: The system must calculate the maximum allowable certified output by multiplying the incoming certified mass by this conversion factor ().
+      * Methodology Lock: The system should prevent users from changing their chosen conversion or consumption factor methodology in the middle of a certification period.
+4. Ledger Balancing & Deficit Rules
+This is the core math engine of the mass balance system.
+         * Period Enforcement: The system must enforce defined mass balance periods capped at a maximum of three (3) months.
+         * Continuous Accounting: Periods must be continuous without gaps; the system must automatically open a new period even if no material movement occurs.
+         * The Golden Rule: The system logic must enforce that the total outgoing certified material never exceeds the sum of the opening certified stock plus incoming certified material for that period.
+         * Hard Deficit Block: The system must throw a hard error and prevent ledger closure if the calculation results in a negative balance (deficit).
+         * Gas Grid Exception: For biomethane or gas injected into a transmission grid, the system must strictly monitor the balance in real-time to ensure it never goes into deficit at any point during the period, not just at the end.
+5. Credit Carryover & Scheme Differences
+Your system must deploy different logical rules for surplus credits based on the certification scheme.
+         * Credit Calculation: At the end of a period, the system calculates surplus credits ().
+         * ISCC EU Carryover Check: To carry positive credits into the next period under ISCC EU, the system must verify against physical inventory data. Credits can only be transferred if an equivalent amount of physical material (sustainable or non-sustainable) is currently held in stock at that specific site.
+         * ISCC PLUS Carryover Check: Under ISCC PLUS, the system must allow positive credits to carry forward with no time limit, regardless of whether any physical material is currently in stock.
+         * Multi-Site Transfers (ISCC PLUS Only): The system may allow credit transfers between different sites under ISCC PLUS only if it verifies the sites belong to the same company or corporate group, are within national borders or neighboring countries, and are handling the same kind of product.
+6. Audit Readiness & Reporting
+The platform must generate the evidence required by third-party auditors.
+            * Periodic Reporting: The system must automatically generate periodic reports (e.g., monthly) detailing opening/closing stocks and incoming/outgoing quantities for both certified and non-certified materials.
+            * Data Retention: The database must securely retain all mass balance ledgers, linked contracts, delivery notes, and SDs for a minimum of five (5) years.

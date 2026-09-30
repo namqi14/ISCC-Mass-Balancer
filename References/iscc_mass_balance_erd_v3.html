@@ -1,0 +1,176 @@
+<style>
+#erd svg.erDiagram .divider path { stroke-opacity: 0.5; }
+#erd svg.erDiagram .row-rect-odd path,
+#erd svg.erDiagram .row-rect-odd rect,
+#erd svg.erDiagram .row-rect-even path,
+#erd svg.erDiagram .row-rect-even rect { stroke: none !important; }
+</style>
+<div id="erd">Loading diagram...</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+(function() {
+  var dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  var src = "erDiagram\n" +
+    "  SITES ||--o{ PERIODS : has\n" +
+    "  SITES ||--o{ BATCHES : has\n" +
+    "  SITES ||--o{ PHYSICAL_STOCK_READINGS : has\n" +
+    "  SITES ||--o{ CONVERSION_EVENTS : runs\n" +
+    "  SITES ||--o{ SCHEME_TRANSFERS : sends_as_source\n" +
+    "  SITES ||--o{ SCHEME_TRANSFERS : receives_as_target\n" +
+    "  PERIODS ||--o{ TRANSACTIONS : contains\n" +
+    "  PERIODS ||--o{ PERIOD_BALANCES : closes_into\n" +
+    "  PERIODS ||--o{ CONVERSION_EVENTS : occurs_in\n" +
+    "  PHYSICAL_DOCUMENTS ||--o{ TRANSACTIONS : evidences\n" +
+    "  BATCHES ||--o{ TRANSACTIONS : moves_in\n" +
+    "  BATCHES ||--o{ BATCH_MERGES : as_source\n" +
+    "  BATCHES ||--o{ BATCH_MERGES : as_result\n" +
+    "  BATCHES ||--o{ SCHEME_TRANSFERS : is_transferred\n" +
+    "  CONVERSION_EVENTS ||--o{ CONVERSION_LINES : has\n" +
+    "  TRANSACTIONS ||--o{ CONVERSION_LINES : is_line_of\n" +
+    "  SITES {\n" +
+    "    int id PK\n" +
+    "    string name\n" +
+    "    string location_id UK\n" +
+    "    enum cert_scheme\n" +
+    "    enum operator_type \"TRADER or PROCESSING_UNIT\"\n" +
+    "    bool multi_site_balancing_enabled\n" +
+    "    int default_period_length_months \"capped at 3\"\n" +
+    "  }\n" +
+    "  PERIODS {\n" +
+    "    int id PK\n" +
+    "    int site_id FK\n" +
+    "    date start_date\n" +
+    "    date end_date \"max 3 months from start_date\"\n" +
+    "    enum status\n" +
+    "    int previous_period_id FK\n" +
+    "    datetime closed_at\n" +
+    "  }\n" +
+    "  PHYSICAL_DOCUMENTS {\n" +
+    "    int id PK\n" +
+    "    string document_type\n" +
+    "    string document_number UK\n" +
+    "    date document_date\n" +
+    "  }\n" +
+    "  BATCHES {\n" +
+    "    int id PK\n" +
+    "    int site_id FK\n" +
+    "    enum cert_scheme \"EU or PLUS\"\n" +
+    "    string raw_material \"grouping key\"\n" +
+    "    string country_of_origin \"grouping key\"\n" +
+    "    decimal ghg_value \"grouping key\"\n" +
+    "    enum product_type \"grouping key\"\n" +
+    "    bool is_merged\n" +
+    "  }\n" +
+    "  BATCH_MERGES {\n" +
+    "    int id PK\n" +
+    "    int result_batch_id FK\n" +
+    "    int source_batch_id FK\n" +
+    "    decimal contributed_volume\n" +
+    "    decimal source_ghg_value\n" +
+    "  }\n" +
+    "  TRANSACTIONS {\n" +
+    "    int id PK\n" +
+    "    int site_id FK\n" +
+    "    int period_id FK\n" +
+    "    int batch_id FK\n" +
+    "    enum transaction_type \"IN OUT CONV_IN CONV_OUT\"\n" +
+    "    decimal volume\n" +
+    "    date transaction_date\n" +
+    "    int physical_document_id FK\n" +
+    "  }\n" +
+    "  CONVERSION_EVENTS {\n" +
+    "    int id PK\n" +
+    "    int site_id FK \"must be PROCESSING_UNIT\"\n" +
+    "    int period_id FK\n" +
+    "    decimal conversion_factor_cf\n" +
+    "    date conversion_date\n" +
+    "  }\n" +
+    "  CONVERSION_LINES {\n" +
+    "    int id PK\n" +
+    "    int conversion_event_id FK\n" +
+    "    int transaction_id FK\n" +
+    "    enum role \"INPUT or OUTPUT\"\n" +
+    "  }\n" +
+    "  SCHEME_TRANSFERS {\n" +
+    "    int id PK\n" +
+    "    int source_site_id FK \"cert_scheme must be EU\"\n" +
+    "    int target_site_id FK \"cert_scheme must be PLUS\"\n" +
+    "    int batch_id FK\n" +
+    "    decimal volume\n" +
+    "    date transfer_date\n" +
+    "  }\n" +
+    "  PHYSICAL_STOCK_READINGS {\n" +
+    "    int id PK\n" +
+    "    int site_id FK\n" +
+    "    date reading_date\n" +
+    "    decimal certified_stock_qty\n" +
+    "    decimal fossil_stock_qty\n" +
+    "  }\n" +
+    "  PERIOD_BALANCES {\n" +
+    "    int id PK\n" +
+    "    int period_id FK\n" +
+    "    enum product_type\n" +
+    "    decimal total_available_B\n" +
+    "    decimal outgoing_C\n" +
+    "    decimal closing_balance\n" +
+    "    decimal credits_carried_forward \"EU capped by physical stock, PLUS uncapped\"\n" +
+    "    decimal ghg_value_assigned\n" +
+    "  }\n";
+
+  function renderDiagram() {
+    window.mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      fontFamily: '"Anthropic Sans", sans-serif',
+      themeVariables: {
+        darkMode: dark,
+        fontSize: '13px',
+        fontFamily: '"Anthropic Sans", sans-serif',
+        lineColor: dark ? '#9c9a92' : '#73726c',
+        textColor: dark ? '#c2c0b6' : '#3d3d3a'
+      }
+    });
+    window.mermaid.render('erd-svg', src).then(function(result) {
+      document.getElementById('erd').innerHTML = result.svg;
+
+      document.querySelectorAll('#erd svg.erDiagram .node').forEach(function(node) {
+        var firstPath = node.querySelector('path[d]');
+        if (!firstPath) return;
+        var d = firstPath.getAttribute('d');
+        var nums = (d.match(/-?[\d.]+/g) || []).map(Number);
+        if (nums.length < 8) return;
+        var xs = [nums[0], nums[2], nums[4], nums[6]];
+        var ys = [nums[1], nums[3], nums[5], nums[7]];
+        var x = Math.min.apply(null, xs), y = Math.min.apply(null, ys);
+        var w = Math.max.apply(null, xs) - x, h = Math.max.apply(null, ys) - y;
+        var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', x); rect.setAttribute('y', y);
+        rect.setAttribute('width', w); rect.setAttribute('height', h);
+        rect.setAttribute('rx', '8');
+        ['fill','stroke','stroke-width','class','style'].forEach(function(a) {
+          if (firstPath.hasAttribute(a)) rect.setAttribute(a, firstPath.getAttribute(a));
+        });
+        firstPath.replaceWith(rect);
+      });
+
+      document.querySelectorAll('#erd svg.erDiagram .row-rect-odd path, #erd svg.erDiagram .row-rect-even path').forEach(function(p) {
+        p.setAttribute('stroke', 'none');
+      });
+    }).catch(function(err) {
+      document.getElementById('erd').textContent = 'Diagram failed to render: ' + err.message;
+    });
+  }
+
+  if (window.mermaid) {
+    renderDiagram();
+  } else {
+    var check = setInterval(function() {
+      if (window.mermaid) {
+        clearInterval(check);
+        renderDiagram();
+      }
+    }, 100);
+    setTimeout(function(){ clearInterval(check); }, 8000);
+  }
+})();
+</script>

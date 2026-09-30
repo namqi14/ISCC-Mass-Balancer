@@ -1,0 +1,199 @@
+// ISCC Mass Balance Bookkeeping Tool -- Database Schema (DBML)
+// Docs: https://dbml.dbdiagram.io/docs
+// Mirrors models.py + mass_balance_engine.py, plus rules added on top:
+//   - EU -> PLUS one-directional volume transfer (scheme_transfers)
+//   - 3-month max balancing period (periods.end_date, enforced in engine)
+//   - Sustainability-attribute grouping key (already on batches)
+//   - Trader vs Processing Unit roles + explicit conversion events/lines
+//   - EU carry-forward capped by physical stock, PLUS uncapped (period_balances)
+
+Enum cert_scheme {
+  ISCC_EU
+  ISCC_PLUS
+}
+
+Enum product_type {
+  BIOMETHANE
+  BIOLNG
+}
+
+Enum operator_type {
+  TRADER
+  PROCESSING_UNIT
+}
+
+Enum transaction_type {
+  INBOUND
+  OUTBOUND
+  CONVERSION_IN
+  CONVERSION_OUT
+}
+
+Enum period_status {
+  OPEN
+  CLOSED
+}
+
+Enum conversion_role {
+  INPUT
+  OUTPUT
+}
+
+Table sites {
+  id integer [primary key]
+  name varchar
+  location_id varchar [unique]
+  cert_scheme cert_scheme
+  operator_type operator_type [note: 'TRADER: in/out only. PROCESSING_UNIT: may also run conversions']
+  multi_site_balancing_enabled boolean [default: false, note: 'must be explicitly opted into before pooling across sites']
+  default_period_length_months integer [default: 3, note: 'hard cap: 3 months max per period']
+  created_at timestamp
+}
+
+Table periods {
+  id integer [primary key]
+  site_id integer [not null]
+  start_date date
+  end_date date [note: 'end_date - start_date <= 3 months']
+  status period_status
+  previous_period_id integer [note: 'self-reference; null only for a site''s first period']
+  closed_at timestamp
+  closed_by varchar
+}
+
+Table physical_documents {
+  id integer [primary key]
+  document_type varchar [note: 'WEIGHBRIDGE_TICKET / DELIVERY_NOTE']
+  document_number varchar [unique]
+  document_date date
+  issued_by varchar
+  file_reference text
+}
+
+Table batches {
+  id integer [primary key]
+  site_id integer [not null]
+  cert_scheme cert_scheme
+  raw_material varchar [note: 'sustainability grouping key']
+  country_of_origin varchar [note: 'sustainability grouping key']
+  ghg_value decimal [note: 'gCO2eq/MJ; sustainability grouping key']
+  product_type product_type [note: 'sustainability grouping key']
+  is_merged boolean [default: false]
+  created_at timestamp
+}
+
+Table batch_merges {
+  id integer [primary key]
+  result_batch_id integer [not null]
+  source_batch_id integer [not null]
+  contributed_volume decimal
+  source_ghg_value decimal [note: 'result batch GHG = MAX across all sources, never averaged']
+}
+
+Table transactions {
+  id integer [primary key]
+  site_id integer [not null]
+  period_id integer [not null]
+  batch_id integer [not null]
+  transaction_type transaction_type
+  volume decimal
+  transaction_date date
+  counterparty_name varchar
+  counterparty_cert_number varchar
+  physical_document_id integer [note: 'required when transaction_type = INBOUND (CHECK constraint)']
+  created_at timestamp
+  created_by varchar
+}
+
+// A conversion event ties one conversion factor to the specific input and
+// output transactions it governs, rather than trusting loose CONVERSION_IN /
+// CONVERSION_OUT tags with no link between them. Only sites with
+// operator_type = PROCESSING_UNIT may create these.
+Table conversion_events {
+  id integer [primary key]
+  site_id integer [not null, note: 'site.operator_type must be PROCESSING_UNIT']
+  period_id integer [not null]
+  conversion_factor_cf decimal
+  conversion_date date
+  created_by varchar
+}
+
+Table conversion_lines {
+  id integer [primary key]
+  conversion_event_id integer [not null]
+  transaction_id integer [not null]
+  role conversion_role [note: 'INPUT or OUTPUT']
+}
+
+// One-directional EU -> PLUS volume transfer between two sites (usually two
+// certifications held by the same company). PLUS -> EU is never allowed;
+// enforced in the engine by checking source.cert_scheme = ISCC_EU and
+// target.cert_scheme = ISCC_PLUS.
+Table scheme_transfers {
+  id integer [primary key]
+  source_site_id integer [not null, note: 'cert_scheme must be ISCC_EU']
+  target_site_id integer [not null, note: 'cert_scheme must be ISCC_PLUS']
+  batch_id integer [not null]
+  volume decimal
+  transfer_date date
+  created_by varchar
+}
+
+Table physical_stock_readings {
+  id integer [primary key]
+  site_id integer [not null]
+  reading_date date
+  certified_stock_qty decimal
+  fossil_stock_qty decimal [default: 0]
+  source varchar [note: 'SENSOR / MANUAL_STOCKTAKE']
+  recorded_by varchar
+}
+
+Table period_balances {
+  id integer [primary key]
+  period_id integer [not null]
+  product_type product_type
+  incoming_a decimal [note: 'A']
+  opening_input_inventory_a decimal [note: 'a']
+  conversion_factor_cf decimal [note: 'CF']
+  opening_output_inventory_b decimal [note: 'b']
+  total_available_B decimal [note: 'B = (A + a) x CF + b']
+  outgoing_C decimal [note: 'C']
+  closing_balance decimal [note: 'B - C']
+  credits_carried_forward decimal [note: 'ISCC_EU: capped by physical_stock_readings. ISCC_PLUS: uncapped']
+  ghg_value_assigned decimal
+  computed_at timestamp
+}
+
+Table audit_log {
+  id integer [primary key]
+  entity_type varchar
+  entity_id integer
+  action varchar
+  actor varchar
+  timestamp timestamp
+  before_value text
+  after_value text
+  notes text
+
+  Note: 'Append-only. Application code must only ever INSERT here.'
+}
+
+Ref: periods.site_id > sites.id
+Ref: periods.previous_period_id > periods.id
+Ref: batches.site_id > sites.id
+Ref: batch_merges.result_batch_id > batches.id
+Ref: batch_merges.source_batch_id > batches.id
+Ref: transactions.site_id > sites.id
+Ref: transactions.period_id > periods.id
+Ref: transactions.batch_id > batches.id
+Ref: transactions.physical_document_id > physical_documents.id
+Ref: conversion_events.site_id > sites.id
+Ref: conversion_events.period_id > periods.id
+Ref: conversion_lines.conversion_event_id > conversion_events.id
+Ref: conversion_lines.transaction_id > transactions.id
+Ref: scheme_transfers.source_site_id > sites.id
+Ref: scheme_transfers.target_site_id > sites.id
+Ref: scheme_transfers.batch_id > batches.id
+Ref: physical_stock_readings.site_id > sites.id
+Ref: period_balances.period_id > periods.id

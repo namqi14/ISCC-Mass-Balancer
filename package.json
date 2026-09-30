@@ -1,0 +1,13 @@
+{
+  "name": "mass-balancer-tooling",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root-level dev tooling only (not the app). Backend and frontend have their own package.json. These deps let the Impeccable design-detector skill (.claude/skills/impeccable) do full browser + static-HTML analysis.",
+  "devDependencies": {
+    "puppeteer": "^25.7.0",
+    "htmlparser2": "^12.0.0",
+    "css-select": "^7.0.0",
+    "css-tree": "^3.2.1",
+    "domutils": "^4.0.2"
+  }
+}

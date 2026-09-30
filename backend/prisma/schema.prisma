@@ -1,0 +1,676 @@
+// ISCC Mass Balance Bookkeeping -- Prisma schema (MySQL)
+//
+// This is a direct implementation of References/Database Schema.pdf (the
+// authoritative dbdiagram.io export -- table shapes, FKs, and the
+// user_role enum with its client-authored notes all come from there), also
+// cross-checked against References/models.py + mass_balance_engine.py +
+// iscc_mass_balance_schema.dbml, which describe the same design from a
+// slightly earlier iteration. Two deliberate additions on top of the PDF:
+//
+//   1. `Company` model. The PDF's `companies` table is referenced by every
+//      other table's company_id column but isn't itself spelled out beyond
+//      the ERD box; this fleshes it out with the fields the ERD shows
+//      (name, registration_number, is_active, created_at).
+//   2. A couple of tables (`batch_merges`, `period_balances`) get a
+//      company_id column that isn't in the PDF's version of those two
+//      tables specifically. Mass-Balancer.MD states the isolation rule at
+//      the project level ("every operational table... includes company_id
+//      to strictly isolate data and prevent cross-tenant leaks"), so this
+//      keeps that guarantee uniform rather than leaving two tables
+//      reachable only via a join through their parent row.
+//
+// Business-rule enforcement (no negative balances, GHG max-not-average, EU
+// vs PLUS carry-forward, 0.5% tolerance, period continuity, one-directional
+// scheme transfers) lives in src/lib/massBalanceEngine.ts, not here -- the
+// schema is not the only thing standing between bad data and the database.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+// Matches Database Schema.pdf exactly, notes included -- these are the
+// client's own words, not a paraphrase:
+enum UserRole {
+  SUPER_ADMIN // "Your client - can see all companies"
+  COMPANY_ADMIN // "The end client - manages their own company sites/users"
+  COMPANY_USER // "Data entry for specific sites"
+}
+
+enum CertScheme {
+  ISCC_EU
+  ISCC_PLUS
+}
+
+enum OperatorType {
+  TRADER // inbound/outbound only
+  PROCESSING_UNIT // may also run conversions
+}
+
+enum ProductType {
+  BIOMETHANE
+  BIOLNG
+}
+
+enum TransactionType {
+  INBOUND
+  OUTBOUND
+  CONVERSION_IN
+  CONVERSION_OUT
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+}
+
+enum ConversionRole {
+  INPUT
+  OUTPUT
+}
+
+// How the supplier prepared the GHG figure ("as prepared by the supplier",
+// per the client's own clarification): Disaggregated Default Value /
+// Default Value / Actual Value. Recorded, not computed -- this app never
+// derives one from the others.
+enum GhgValueType {
+  DDV
+  DV
+  AV
+}
+
+// Required only when Batch.materialCategory = "Bio-Circular" (client
+// clarification: bio-circular materials must record waste status).
+enum WasteStatus {
+  PRE_CONSUMER
+  POST_CONSUMER
+  MIXED
+  UNSPECIFIED
+}
+
+// The two official ISCC unit lists collapsed into one set -- ISCC EU's
+// "Metric Tons" and ISCC PLUS's "mt" are the same physical unit, so one
+// enum value covers both rather than duplicating it.
+enum Unit {
+  M3
+  METRIC_TONS
+  KG
+  M3_15C
+  J
+  KWH
+}
+
+// Backs the DB-backed job queue (see backend/src/lib/jobs.ts) -- this
+// environment has no message broker (no Redis, no Docker to run one), so a
+// polled job table is the honest real substitute at this project's scale.
+enum JobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy & identity
+// ---------------------------------------------------------------------------
+
+model Company {
+  id                 Int      @id @default(autoincrement())
+  name               String   @db.VarChar(200)
+  registrationNumber String?  @db.VarChar(100)
+  isActive           Boolean  @default(true)
+  // SUPER_ADMIN-assigned cap on how many sites this company's COMPANY_ADMIN
+  // may create (client clarification, 2026-08-25: "can only create as much
+  // site as SUPER_ADMIN assigned to them"). Nullable = no cap set yet /
+  // unlimited, matching the same nullable-means-unconstrained convention
+  // already used for Site.certifiedFrom/certifiedTo. Enforced in
+  // sites.routes.ts's POST /, not here.
+  maxSites           Int?
+  // Company Profile module (client clarification, 2026-08-26): editable by
+  // COMPANY_ADMIN themselves via PATCH /companies/me, unlike name/
+  // registrationNumber's original SUPER_ADMIN-only path -- all nullable,
+  // a company may not have filled these in yet.
+  address            String?  @db.VarChar(500)
+  contactName        String?  @db.VarChar(200)
+  contactPhone       String?  @db.VarChar(50)
+  contactEmail       String?  @db.VarChar(200)
+  // Servable path under /uploads (see index.ts's static route), set by
+  // POST /companies/me/logo, not by the plain PATCH /companies/me.
+  logoUrl            String?  @db.VarChar(500)
+  createdAt          DateTime @default(now())
+
+  users                 User[]
+  sites                 Site[]
+  periods               Period[]
+  physicalDocuments     PhysicalDocument[]
+  batches               Batch[]
+  batchMerges           BatchMerge[]
+  transactions          Transaction[]
+  conversionEvents      ConversionEvent[]
+  conversionLines       ConversionLine[]
+  schemeTransfers       SchemeTransfer[]
+  physicalStockReadings PhysicalStockReading[]
+  periodBalances        PeriodBalance[]
+  auditLog              AuditLogEntry[]
+
+  @@map("companies")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  email        String   @unique @db.VarChar(200)
+  passwordHash String   @db.VarChar(200)
+  name         String   @db.VarChar(200)
+  role         UserRole @default(COMPANY_USER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  transactionsCreated     Transaction[]
+  conversionEventsCreated ConversionEvent[]
+  schemeTransfersCreated  SchemeTransfer[]
+  stockReadingsRecorded   PhysicalStockReading[]
+  auditLogEntries         AuditLogEntry[]
+  periodsClosed           Period[]
+  siteAccess              UserSiteAccess[]
+
+  @@index([companyId])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Core tables
+// ---------------------------------------------------------------------------
+
+model Site {
+  id                        Int          @id @default(autoincrement())
+  companyId                 Int
+  name                      String       @db.VarChar(200)
+  locationId                String       @unique @db.VarChar(100)
+  certScheme                CertScheme
+  operatorType              OperatorType @default(TRADER)
+  // Rule 1: disabled by default -- must be explicitly opted into before
+  // batches/balances may be pooled across more than one site.
+  multiSiteBalancingEnabled Boolean      @default(false)
+  // Hard cap: 3 months max per period (enforced in the engine).
+  defaultPeriodLengthMonths Int          @default(3)
+  // Needed for the PLUS-to-PLUS scheme transfer's same/neighboring-country
+  // check (createPlusToPlusTransfer) -- didn't exist before that feature.
+  country                   String       @default("Malaysia") @db.VarChar(100)
+  // The site's real ISCC certificate (client-supplied EU/PLUS certificate
+  // PDFs, References/ISCC EU CERTIFICATE.pdf and ISCC PLUS CERTIFICATE.pdf).
+  // All five nullable together: a site may not have a certificate on file
+  // yet (e.g. mid-audit, before the first one arrives), in which case
+  // openNewPeriod applies no additional bound beyond today's continuity/
+  // 3-month checks. These represent the CURRENT certificate only, not a
+  // history of past ones -- when a certificate renews, these get updated in
+  // place; already-closed periods aren't retroactively re-validated against
+  // whatever the fields say later.
+  certificateNumber   String?   @db.VarChar(100)
+  certifyingBody      String?   @db.VarChar(300)
+  certifiedFrom       DateTime? @db.Date
+  certifiedTo         DateTime? @db.Date
+  // Free-text, comma-separated (e.g. "Point of Origin, Biogas plant,
+  // Biomethane plant") -- descriptive only, not used in any enforcement
+  // logic, so a plain string matches how PhysicalDocument.documentType is
+  // already handled rather than a stricter structure.
+  certifiedSiteRoles  String?   @db.VarChar(300)
+  // The certificate PDF itself, once uploaded via POST /sites/parse-certificate
+  // (AI-assisted autofill of the five fields above) -- same nullable
+  // path-string convention as Company.logoUrl, served by the same /uploads
+  // static mount (backend/src/index.ts).
+  certificateFileUrl String?   @db.VarChar(500)
+  createdAt                 DateTime     @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  periods               Period[]
+  batches               Batch[]
+  transactions          Transaction[]
+  conversionEvents      ConversionEvent[]
+  schemeTransfersOut    SchemeTransfer[]       @relation("SourceSite")
+  schemeTransfersIn     SchemeTransfer[]       @relation("TargetSite")
+  physicalStockReadings PhysicalStockReading[]
+  userAccess            UserSiteAccess[]
+
+  @@index([companyId])
+  @@map("sites")
+}
+
+// Scopes a COMPANY_ADMIN/COMPANY_USER to specific sites rather than their
+// whole company -- layered on top of the existing 3-value UserRole rather
+// than adding a 4th role (see the client clarification's 3-tier hierarchy
+// and PRODUCT.md for why). A user with NO rows here is unrestricted within
+// their company (today's existing behavior, unchanged) -- absence of rows
+// means "all sites," not "no sites."
+model UserSiteAccess {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  siteId    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@unique([userId, siteId])
+  @@map("user_site_access")
+}
+
+model Period {
+  id               Int          @id @default(autoincrement())
+  companyId        Int
+  siteId           Int
+  startDate        DateTime     @db.Date
+  endDate          DateTime     @db.Date
+  status           PeriodStatus @default(OPEN)
+  // Rule 2: chain to the immediately preceding period; NULL only for a
+  // site's very first period. Continuity (end_date + 1 day == next.start_date)
+  // is validated in the engine, not by this FK alone.
+  previousPeriodId Int?         @unique
+  closedAt         DateTime?
+  closedById       Int?
+
+  company        Company @relation(fields: [companyId], references: [id])
+  site           Site    @relation(fields: [siteId], references: [id])
+  previousPeriod Period? @relation("PeriodChain", fields: [previousPeriodId], references: [id])
+  nextPeriod     Period? @relation("PeriodChain")
+  closedBy       User?   @relation(fields: [closedById], references: [id])
+
+  transactions     Transaction[]
+  conversionEvents ConversionEvent[]
+  balances         PeriodBalance[]
+
+  @@unique([siteId, startDate], name: "uq_period_site_start")
+  @@index([companyId])
+  @@map("periods")
+}
+
+model PhysicalDocument {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  documentType   String   @db.VarChar(50) // WEIGHBRIDGE_TICKET / DELIVERY_NOTE
+  documentNumber String   @unique @db.VarChar(100)
+  documentDate   DateTime @db.Date
+  // Application-level AES-256-GCM ciphertext (see fieldEncryption.ts), not
+  // plaintext -- widened from VarChar(200) to hold the versioned
+  // prefix + base64 IV/authTag/ciphertext overhead. documentNumber is
+  // deliberately NOT encrypted the same way: it's @unique, and AES-GCM's
+  // random IV makes identical plaintexts encrypt differently every time,
+  // which would break that constraint.
+  issuedBy       String?  @db.VarChar(500)
+  fileReference  String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  company      Company       @relation(fields: [companyId], references: [id])
+  transactions Transaction[]
+
+  @@index([companyId])
+  @@map("physical_documents")
+}
+
+model Batch {
+  id              Int         @id @default(autoincrement())
+  companyId       Int
+  siteId          Int
+  certScheme      CertScheme
+  // Sustainability-attribute grouping key: rawMaterial + countryOfOrigin +
+  // ghgValue + productType together define which "pool" a batch belongs to.
+  rawMaterial     String      @db.VarChar(150)
+  countryOfOrigin String      @db.VarChar(100)
+  ghgValue        Decimal     @db.Decimal(10, 4) // gCO2eq/MJ
+  productType     ProductType
+  // How the supplier prepared ghgValue (client clarification: recorded as
+  // given, this app never derives one GHG type from another). No app-level
+  // default -- always deliberately chosen by whoever books the delivery.
+  ghgValueType    GhgValueType
+  // Scheme-dependent controlled vocabulary, validated at the Zod layer
+  // (see recordTransaction's caller) rather than a DB enum -- EU and PLUS
+  // use genuinely different category vocabularies (EU: Annex IX Part A/B,
+  // Other/Unclassified, Waste & Residues; PLUS: Bio, Bio-Circular,
+  // Circular, Renewable energy-derived), and a plain validated string
+  // avoids MySQL enum-alteration friction if ISCC revises the wording.
+  materialCategory String     @db.VarChar(60)
+  // Required only when materialCategory = "Bio-Circular" (client
+  // clarification); null otherwise.
+  wasteStatus      WasteStatus?
+  // Every transaction against this pool must match this unit -- see the
+  // poolKey comment below for why unit had to join the grouping key rather
+  // than live per-transaction.
+  unit             Unit        @default(M3)
+  isMerged        Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  // DB-generated (see the migration SQL, not set by application code): the
+  // grouping key above, concatenated, but ONLY when isMerged = false, else
+  // NULL. MySQL has no partial/conditional unique index, so this generated
+  // column plus a plain unique index on it is the standard workaround --
+  // multiple NULLs don't collide, so merged batches (which can legitimately
+  // share a tuple with an unmerged one, e.g. inheriting a source's raw
+  // material) are entirely unconstrained by this, while two unmerged pools
+  // for the same site/scheme/feedstock/origin/product/GHG/unit value can
+  // never both exist. This is what closes findOrCreateBatch's race: a
+  // second concurrent INBOUND for a brand-new pool now fails with a unique
+  // violation instead of silently creating a duplicate pool, and the
+  // caller catches that and re-reads the pool the first request created.
+  // `unit` joined this key in the same migration ghgValueType/
+  // materialCategory/wasteStatus/unit were added: a pool's running balance
+  // is a plain sum of its transactions' volumes, which is only valid
+  // arithmetic if every transaction against it shares one unit -- so two
+  // pools that are identical in every other attribute but differ in unit
+  // must never be allowed to collide into one.
+  poolKey String? @unique @db.VarChar(400)
+
+  company Company @relation(fields: [companyId], references: [id])
+  site    Site    @relation(fields: [siteId], references: [id])
+
+  transactions    Transaction[]
+  mergesAsResult  BatchMerge[]     @relation("ResultBatch")
+  mergesAsSource  BatchMerge[]     @relation("SourceBatch")
+  schemeTransfers SchemeTransfer[]
+
+  @@index([companyId])
+  @@index([siteId])
+  @@map("batches")
+}
+
+model BatchMerge {
+  id                Int     @id @default(autoincrement())
+  companyId         Int
+  resultBatchId     Int
+  sourceBatchId     Int
+  contributedVolume Decimal @db.Decimal(18, 3)
+  // Rule 7: result batch GHG = MAX across all sources, never averaged.
+  // Kept per-source here so that assignment is traceable, not just asserted.
+  sourceGhgValue    Decimal @db.Decimal(10, 4)
+
+  company     Company @relation(fields: [companyId], references: [id])
+  resultBatch Batch   @relation("ResultBatch", fields: [resultBatchId], references: [id])
+  sourceBatch Batch   @relation("SourceBatch", fields: [sourceBatchId], references: [id])
+
+  @@index([companyId])
+  @@map("batch_merges")
+}
+
+model Transaction {
+  id                     Int             @id @default(autoincrement())
+  companyId              Int
+  siteId                 Int
+  periodId               Int
+  batchId                Int
+  transactionType        TransactionType
+  volume                 Decimal         @db.Decimal(18, 3)
+  transactionDate        DateTime        @db.Date
+  // Both application-level AES-256-GCM ciphertext (see fieldEncryption.ts),
+  // not plaintext -- widened to hold the versioned prefix + base64
+  // IV/authTag/ciphertext overhead. Applies equally to the two synthetic
+  // "Scheme transfer to/from ..." strings createSchemeTransfer writes here.
+  counterpartyName       String?         @db.VarChar(500)
+  counterpartyCertNumber String?         @db.VarChar(300)
+  // Rule 3: required when transactionType = INBOUND *and* the transaction
+  // did not originate from a scheme transfer (see schemeTransferId below),
+  // enforced in the engine (MySQL doesn't support portable partial/
+  // conditional CHECK constraints the way Postgres does).
+  physicalDocumentId     Int?
+  // Set on the two transactions a scheme transfer generates (an OUTBOUND
+  // leg debiting the EU source pool, an INBOUND leg crediting the PLUS
+  // target pool) so both are traceable back to the transfer that created
+  // them, and so period-close and available-volume calculations -- which
+  // only ever look at this table -- automatically pick up transfer volume
+  // without a separate code path. From Database Schema.pdf.
+  schemeTransferId       Int?
+  createdAt              DateTime        @default(now())
+  createdById            Int?
+
+  company          Company           @relation(fields: [companyId], references: [id])
+  site             Site              @relation(fields: [siteId], references: [id])
+  period           Period            @relation(fields: [periodId], references: [id])
+  batch            Batch             @relation(fields: [batchId], references: [id])
+  physicalDocument PhysicalDocument? @relation(fields: [physicalDocumentId], references: [id])
+  schemeTransfer   SchemeTransfer?   @relation(fields: [schemeTransferId], references: [id])
+  createdBy        User?             @relation(fields: [createdById], references: [id])
+  conversionLines  ConversionLine[]
+
+  @@index([companyId])
+  @@index([periodId])
+  @@index([batchId])
+  @@index([schemeTransferId])
+  @@map("transactions")
+}
+
+// A conversion event ties one conversion factor to the specific input and
+// output transactions it governs, rather than trusting loose CONVERSION_IN /
+// CONVERSION_OUT tags with no link between them. Only sites with
+// operatorType = PROCESSING_UNIT may create these (enforced in the engine).
+model ConversionEvent {
+  id                 Int      @id @default(autoincrement())
+  companyId          Int
+  siteId             Int
+  periodId           Int
+  conversionFactorCf Decimal  @db.Decimal(10, 6)
+  conversionDate     DateTime @db.Date
+  createdAt          DateTime @default(now())
+  createdById        Int?
+
+  company   Company          @relation(fields: [companyId], references: [id])
+  site      Site             @relation(fields: [siteId], references: [id])
+  period    Period           @relation(fields: [periodId], references: [id])
+  createdBy User?            @relation(fields: [createdById], references: [id])
+  lines     ConversionLine[]
+
+  @@index([companyId])
+  @@index([periodId])
+  @@map("conversion_events")
+}
+
+model ConversionLine {
+  id                Int            @id @default(autoincrement())
+  companyId         Int
+  conversionEventId Int
+  transactionId     Int
+  role              ConversionRole // INPUT or OUTPUT
+
+  company         Company         @relation(fields: [companyId], references: [id])
+  conversionEvent ConversionEvent @relation(fields: [conversionEventId], references: [id])
+  transaction     Transaction     @relation(fields: [transactionId], references: [id])
+
+  @@index([companyId])
+  @@map("conversion_lines")
+}
+
+// One-directional ISCC EU -> ISCC PLUS volume transfer between two sites
+// (typically two certifications held by the same company). PLUS -> EU is
+// never allowed; enforced in the engine by checking source.certScheme =
+// ISCC_EU and target.certScheme = ISCC_PLUS.
+//
+// `batchId` (matching Database Schema.pdf's single `batch_id` column) is
+// the EU source pool being drawn down. The PLUS pool it credits at the
+// target site isn't a column here -- it's derived the same way a
+// conversion's output pool is: through the linked Transaction row (the
+// INBOUND leg tagged with this transfer's id, see Transaction.schemeTransferId).
+model SchemeTransfer {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  sourceSiteId Int
+  targetSiteId Int
+  batchId      Int
+  volume       Decimal  @db.Decimal(18, 3)
+  transferDate DateTime @db.Date
+  createdAt    DateTime @default(now())
+  createdById  Int?
+
+  company      Company       @relation(fields: [companyId], references: [id])
+  sourceSite   Site          @relation("SourceSite", fields: [sourceSiteId], references: [id])
+  targetSite   Site          @relation("TargetSite", fields: [targetSiteId], references: [id])
+  batch        Batch         @relation(fields: [batchId], references: [id])
+  createdBy    User?         @relation(fields: [createdById], references: [id])
+  transactions Transaction[]
+
+  @@index([companyId])
+  @@map("scheme_transfers")
+}
+
+// Independent physical inventory reading (tank gauge, sensor feed, or manual
+// stocktake). Used for the ISCC EU carry-forward cap and the 0.5% tolerance
+// check (Rules 6 and 8). Deliberately not derived from booked transactions.
+model PhysicalStockReading {
+  id                Int      @id @default(autoincrement())
+  companyId         Int
+  siteId            Int
+  readingDate       DateTime @db.Date
+  certifiedStockQty Decimal  @db.Decimal(18, 3)
+  fossilStockQty    Decimal  @default(0) @db.Decimal(18, 3)
+  source            String   @db.VarChar(50) // SENSOR / MANUAL_STOCKTAKE
+  recordedById      Int?
+  createdAt         DateTime @default(now())
+
+  company    Company @relation(fields: [companyId], references: [id])
+  site       Site    @relation(fields: [siteId], references: [id])
+  recordedBy User?   @relation(fields: [recordedById], references: [id])
+
+  @@index([companyId])
+  @@index([siteId])
+  @@map("physical_stock_readings")
+}
+
+// One row per (period, product_type): the computed, closed-period result of
+// B = (A + a) x CF + b. The auditable artifact -- every input to the formula
+// is stored alongside the output, not just the final number.
+model PeriodBalance {
+  id                      Int         @id @default(autoincrement())
+  companyId               Int
+  periodId                Int
+  productType             ProductType
+  incomingA               Decimal     @db.Decimal(18, 3) // A
+  openingInputInventoryA  Decimal     @db.Decimal(18, 3) // a
+  conversionFactorCf      Decimal     @db.Decimal(10, 6) // CF
+  openingOutputInventoryB Decimal     @db.Decimal(18, 3) // b
+  totalAvailableB         Decimal     @db.Decimal(18, 3) // B = (A + a) * CF + b
+  outgoingC               Decimal     @db.Decimal(18, 3) // C
+  closingBalance          Decimal     @db.Decimal(18, 3) // B - C
+  creditsCarriedForward   Decimal     @db.Decimal(18, 3)
+  ghgValueAssigned        Decimal     @db.Decimal(10, 4)
+  computedAt              DateTime    @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+  period  Period  @relation(fields: [periodId], references: [id])
+
+  @@unique([periodId, productType], name: "uq_balance_period_product")
+  @@index([companyId])
+  @@map("period_balances")
+}
+
+// Append-only. Application code must only ever INSERT here -- never UPDATE
+// or DELETE (there is deliberately no update/delete route for this model).
+model AuditLogEntry {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  entityType  String   @db.VarChar(50)
+  entityId    Int
+  action      String   @db.VarChar(50)
+  actorId     Int?
+  actorName   String   @db.VarChar(200)
+  timestamp   DateTime @default(now())
+  beforeValue String?  @db.Text
+  afterValue  String?  @db.Text
+  notes       String?  @db.Text
+
+  company Company @relation(fields: [companyId], references: [id])
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  @@index([companyId])
+  @@index([entityType, entityId])
+  @@map("audit_log")
+}
+
+// ---------------------------------------------------------------------------
+// Backend hardening infrastructure (rate limiting, idempotency, cache-adjacent
+// OAuth2 state, job queue) -- technical/operational bookkeeping, not ISCC
+// domain concepts, so these deliberately don't get full Company/User Prisma
+// relations the way the domain models above do; companyId/userId here are
+// plain indexed columns for scoping/observability, not enforced foreign keys.
+// ---------------------------------------------------------------------------
+
+// Backs the OAuth2/OIDC Authorization Code + PKCE flow (see
+// backend/src/lib/oauth.ts). Deliberately DB-backed rather than an
+// in-memory Map: the /login redirect and /callback request are two
+// separate HTTP requests that, once clustering (item 8) is live, can land
+// on two different worker processes. Single-use (deleted on first read at
+// /callback) and short-lived (createdAt + ~10 min).
+model OAuthState {
+  state        String   @id @db.VarChar(200)
+  codeVerifier String   @db.VarChar(300)
+  nonce        String   @db.VarChar(200)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@map("oauth_states")
+}
+
+// Backs the DB-backed rate-limit store (see backend/src/lib/rateLimitStore.ts),
+// used only for the login rate limiter -- the general per-IP API limiter
+// deliberately stays on express-rate-limit's default in-memory store (see
+// that file's comment for why). `key` is caller-composed (e.g. IP+email for
+// login), not tied to a specific model.
+model RateLimitCounter {
+  key     String   @id @db.VarChar(300)
+  points  Int
+  resetAt DateTime
+
+  @@map("rate_limit_counters")
+}
+
+// Backs the idempotency middleware (see backend/src/middleware/idempotency.ts).
+// One row per client-supplied Idempotency-Key per company, so the same key
+// used by two different companies (or the same company twice with different
+// request bodies) is distinguishable.
+model IdempotencyKey {
+  id             Int      @id @default(autoincrement())
+  key            String   @db.VarChar(200)
+  companyId      Int
+  userId         Int
+  route          String   @db.VarChar(200)
+  method         String   @db.VarChar(10)
+  requestHash    String   @db.VarChar(64) // sha256 hex
+  status         String   @db.VarChar(20) // IN_PROGRESS | COMPLETED | FAILED
+  responseStatus Int?
+  responseBody   String?  @db.Text
+  createdAt      DateTime @default(now())
+  completedAt    DateTime?
+
+  @@unique([companyId, key])
+  @@map("idempotency_keys")
+}
+
+// A polled job queue standing in for a real message broker (see JobStatus's
+// comment for why). `enqueueJob` is called from inside the same DB
+// transaction as the business action that triggers it (e.g. closePeriod),
+// so if that transaction rolls back the job row rolls back with it -- a
+// real external broker couldn't give that atomicity without a separate
+// outbox pattern. The worker loop (`startJobWorker`) must run in exactly
+// one process; see its own comment for how that's enforced once clustering
+// (item 8) is live.
+model Job {
+  id          Int       @id @default(autoincrement())
+  type        String    @db.VarChar(100)
+  payload     String    @db.Text // JSON
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAt       DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  lastError   String?   @db.Text
+
+  @@index([status, runAt])
+  @@map("jobs")
+}

@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Condensed:wght@500;600;700&family=Roboto+Slab:wght@600;700&family=Inter:wght@400;500;600&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #f7f7f7; color: #111111; font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+  a { color: #c94f16; text-decoration: none; }
+  a:hover { color: #111111; text-decoration: underline; }
+  input, button, select, textarea { font-family: inherit; font-size: 14px; }
+  input:focus-visible, select:focus-visible { outline: none; border-color: #f26622; box-shadow: 0 0 0 3px rgba(242,102,34,0.15); }
+  button:focus-visible { outline: 2px solid #c94f16; outline-offset: 2px; }
+  @keyframes tin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes min { from { opacity: 0; transform: translateY(-6px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.9; } }
+</style>
+</helmet>
+
+<sc-if value="{{ loggedOut }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height: 100vh; display: grid; place-items: center; background: #f7f7f7; padding: 32px">
+    <div style="width: 380px; max-width: 100%; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 14px; padding: 32px">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 24px">
+        <div style="width: 30px; height: 30px; border-radius: 8px; background: #f26622; display: grid; place-items: center">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ffffff" stroke-width="1.75"><circle cx="8" cy="8" r="5.5"></circle><line x1="8" y1="2.5" x2="8" y2="13.5"></line></svg>
+        </div>
+        <div>
+          <div style="font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 700; line-height: 1.2">ISCC Mass Balancer</div>
+          <div style="font-family: 'Roboto', sans-serif; font-size: 11px; color: #9c9c9c">v1.4 · single tenant</div>
+        </div>
+      </div>
+      <div style="display: grid; gap: 16px">
+        <div style="display: grid; gap: 6px">
+          <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Email</label>
+          <input type="text" value="ops.admin@khpb-energy.com" readonly="" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; color: #111111" />
+        </div>
+        <div style="display: grid; gap: 6px">
+          <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Password</label>
+          <input type="password" value="demopassword" readonly="" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; color: #111111" />
+        </div>
+        <button onClick="{{ login }}" style="background: #f26622; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; padding: 11px 18px; cursor: pointer; transition: background 0.15s" style-hover="background: #c94f16">Sign in</button>
+        <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #9c9c9c; text-align: center">Role-based access · SUPER_ADMIN</div>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ loggedIn }}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; min-height: 100vh; background: #f7f7f7">
+
+  <nav style="width: 224px; flex: 0 0 224px; background: #000000; color: #ffffff; position: sticky; top: 0; align-self: flex-start; height: 100vh; padding: 20px 12px; display: flex; flex-direction: column; gap: 20px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 6px">
+      <div style="width: 26px; height: 26px; border-radius: 7px; background: #f26622; display: grid; place-items: center; flex: none">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#ffffff" stroke-width="1.75"><circle cx="8" cy="8" r="5.5"></circle><line x1="8" y1="2.5" x2="8" y2="13.5"></line></svg>
+      </div>
+      <div style="font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: -0.01em">Mass Balancer</div>
+    </div>
+
+    <div style="display: grid; gap: 2px">
+      <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.55); padding: 6px 8px">Operate</div>
+      <button onClick="{{ goDashboard }}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; border-radius: 6px; padding: 9px 8px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; transition: background 0.15s; background: {{ navDashboardBg }}" style-hover="background: rgba(255,255,255,0.08)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2" y="2" width="5" height="5"></rect><rect x="9" y="2" width="5" height="5"></rect><rect x="2" y="9" width="5" height="5"></rect><rect x="9" y="9" width="5" height="5"></rect></svg>
+        <span>Dashboard</span>
+      </button>
+      <button onClick="{{ goTransactions }}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; border-radius: 6px; padding: 9px 8px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; transition: background 0.15s; background: {{ navTransactionsBg }}" style-hover="background: rgba(255,255,255,0.08)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="2" y1="5" x2="12" y2="5"></line><polyline points="9,2 12,5 9,8"></polyline><line x1="14" y1="11" x2="4" y2="11"></line><polyline points="7,8 4,11 7,14"></polyline></svg>
+        <span>Transactions</span>
+      </button>
+      <button onClick="{{ goBatches }}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; border-radius: 6px; padding: 9px 8px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; transition: background 0.15s; background: {{ navBatchesBg }}" style-hover="background: rgba(255,255,255,0.08)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2" y="6" width="12" height="8"></rect><line x1="4.5" y1="6" x2="4.5" y2="3"></line><line x1="11.5" y1="6" x2="11.5" y2="3"></line></svg>
+        <span>Batches / pools</span>
+      </button>
+      <button onClick="{{ goTransfers }}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; border-radius: 6px; padding: 9px 8px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; transition: background 0.15s; background: {{ navTransfersBg }}" style-hover="background: rgba(255,255,255,0.08)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="4" cy="8" r="2.25"></circle><circle cx="12" cy="8" r="2.25"></circle><line x1="6.25" y1="8" x2="9.75" y2="8"></line></svg>
+        <span>Scheme transfers</span>
+      </button>
+    </div>
+
+    <div style="display: grid; gap: 2px">
+      <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.55); padding: 6px 8px">Structure</div>
+      <button onClick="{{ goSites }}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; border-radius: 6px; padding: 9px 8px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; transition: background 0.15s; background: {{ navSitesBg }}" style-hover="background: rgba(255,255,255,0.08)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2.5" y="5" width="11" height="9"></rect><line x1="2.5" y1="5" x2="8" y2="1.5"></line><line x1="13.5" y1="5" x2="8" y2="1.5"></line></svg>
+        <span>Sites</span>
+      </button>
+      <button onClick="{{ goPeriods }}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; border-radius: 6px; padding: 9px 8px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; transition: background 0.15s; background: {{ navPeriodsBg }}" style-hover="background: rgba(255,255,255,0.08)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2.5" y="3.5" width="11" height="10"></rect><line x1="2.5" y1="6.5" x2="13.5" y2="6.5"></line><line x1="6" y1="1.5" x2="6" y2="3.5"></line><line x1="10" y1="1.5" x2="10" y2="3.5"></line></svg>
+        <span>Periods</span>
+      </button>
+    </div>
+
+    <div style="display: grid; gap: 2px">
+      <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.55); padding: 6px 8px">Administer</div>
+      <button onClick="{{ goUsers }}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; border-radius: 6px; padding: 9px 8px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; transition: background 0.15s; background: {{ navUsersBg }}" style-hover="background: rgba(255,255,255,0.08)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="8" cy="6" r="2.5"></circle><path d="M3 14c0-2.5 2.2-4 5-4s5 1.5 5 4"></path></svg>
+        <span>Users &amp; roles</span>
+      </button>
+      <button onClick="{{ goAudit }}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; border-radius: 6px; padding: 9px 8px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; transition: background 0.15s; background: {{ navAuditBg }}" style-hover="background: rgba(255,255,255,0.08)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="2" width="10" height="12"></rect><line x1="5.5" y1="5.5" x2="10.5" y2="5.5"></line><line x1="5.5" y1="8" x2="10.5" y2="8"></line><line x1="5.5" y1="10.5" x2="8.5" y2="10.5"></line></svg>
+        <span>Audit log</span>
+      </button>
+    </div>
+
+    <div style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.14); padding: 12px 8px 0; display: grid; gap: 8px">
+      <div>
+        <div style="font-size: 13px; font-weight: 600">A. Rahman</div>
+        <div style="font-family: 'Roboto', sans-serif; font-size: 11px; color: rgba(255,255,255,0.55)">SUPER_ADMIN</div>
+      </div>
+      <button onClick="{{ logout }}" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #ffffff; border-radius: 6px; padding: 7px 10px; font-size: 13px; cursor: pointer; text-align: left" style-hover="background: rgba(255,255,255,0.08)">Sign out</button>
+    </div>
+  </nav>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <div style="background: #111111; border-bottom: 3px solid #f26622; padding: 24px 24px 20px; display: flex; justify-content: center">
+      <div style="width: 100%; max-width: 1240px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap">
+        <div>
+          <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #f26622">Mass balance register</div>
+          <h1 style="font-family: 'Roboto Slab', serif; font-size: 28px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; margin: 6px 0 0; color: #ffffff">{{ pageTitle }}</h1>
+          <p style="margin: 6px 0 0; color: rgba(255,255,255,0.62); max-width: 72ch">{{ pageSubtitle }}</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div style="border-left: 1px solid rgba(255,255,255,0.22); padding: 2px 0 2px 12px; display: grid; gap: 2px">
+            <span style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.55)">Company</span>
+            <span style="font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 500; color: #ffffff">KHPB Energy Sdn Bhd</span>
+          </div>
+          <div style="border-left: 1px solid rgba(255,255,255,0.22); padding: 2px 0 2px 12px; display: grid; gap: 2px">
+            <span style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.55)">Period</span>
+            <span style="font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 500; color: #ffffff">{{ openPeriodLabel }}</span>
+          </div>
+          <button onClick="{{ goNewTx }}" style="background: #f26622; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; padding: 10px 18px; cursor: pointer; transition: background 0.15s" style-hover="background: #c94f16">New transaction</button>
+        </div>
+      </div>
+    </div>
+    <div style="padding: 24px; display: flex; justify-content: center">
+    <div style="width: 100%; max-width: 1240px; display: grid; gap: 16px; align-content: start">
+
+      <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+        <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; display: grid; gap: 12px">
+          <div style="height: 12px; width: 180px; border-radius: 999px; background: #ececec; animation: pulse 1.1s ease-in-out infinite"></div>
+          <div style="height: 40px; border-radius: 6px; background: #f2f2f2; animation: pulse 1.1s ease-in-out infinite"></div>
+          <div style="height: 40px; border-radius: 6px; background: #f4f4f4; animation: pulse 1.1s ease-in-out infinite"></div>
+          <div style="height: 40px; border-radius: 6px; background: #f6f6f6; animation: pulse 1.1s ease-in-out infinite"></div>
+          <div style="height: 40px; border-radius: 6px; background: #f8f8f8; animation: pulse 1.1s ease-in-out infinite"></div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+        <div style="display: grid; gap: 12px">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(184px, 1fr)); gap: 12px">
+            <sc-for list="{{ stats }}" as="s" hint-placeholder-count="5">
+              <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 14px 16px; transition: box-shadow 0.15s" style-hover="box-shadow: 0 4px 12px rgba(17,17,17,0.08)">
+                <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">{{ s.label }}</div>
+                <div style="font-family: 'DM Sans', sans-serif; font-size: 28px; font-weight: 700; line-height: 1.15; margin-top: 8px">{{ s.value }}</div>
+                <div style="font-family: 'Roboto', sans-serif; font-size: 11px; color: #9c9c9c; margin-top: 4px">{{ s.unit }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px">
+            <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+              <div>
+                <h2 style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; margin: 0">Balance history</h2>
+                <p style="color: #6b6b6b; margin: 4px 0 0; font-size: 13px">Closing biomethane balance, Sep 2024 to May 2025.</p>
+              </div>
+              <div style="font-family: 'Roboto', sans-serif; font-size: 13px; color: #6b6b6b">3,120.000 → <span style="color: #111111; font-weight: 500">12,480.500 MWh</span></div>
+            </div>
+            <svg viewBox="0 0 300 70" preserveAspectRatio="none" style="width: 100%; height: 96px; margin-top: 14px; display: block" role="img" aria-label="Nine month balance trend">
+              <line x1="0" y1="66" x2="300" y2="66" stroke="#e5e5e5" stroke-width="0.5"></line>
+              <line x1="0" y1="37" x2="300" y2="37" stroke="#f2f2f2" stroke-width="0.5"></line>
+              <polyline points="0,62 37.5,48.4 75,32.7 112.5,28 150,21.6 187.5,16.9 225,14.7 262.5,11.4 300,8" fill="none" stroke="#111111" stroke-width="1.4" vector-effect="non-scaling-stroke"></polyline>
+              <circle cx="187.5" cy="16.9" r="2" fill="#ffffff" stroke="#111111" stroke-width="1" vector-effect="non-scaling-stroke"></circle>
+              <circle cx="300" cy="8" r="2.6" fill="#f26622"></circle>
+            </svg>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #9c9c9c">
+              <span>Sep 2024</span><span>Dec 2024</span><span>Feb 2025</span><span>May 2025</span>
+            </div>
+          </section>
+
+          <div style="display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px">
+            <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px">
+                <h2 style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; margin: 0">Open period</h2>
+                <span style="background: #f26622; color: #ffffff; border-radius: 999px; padding: 3px 10px; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase">{{ openPeriodState }}</span>
+              </div>
+              <div style="font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 500">{{ openPeriodLabel }}</div>
+              <p style="color: #6b6b6b; margin: 6px 0 16px">KHPB Biomethane Plant, ISCC PLUS. Day 74 of a 92 day window, so this period must be closed before 30 Jun 2025.</p>
+              <div style="height: 6px; background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 999px; overflow: hidden">
+                <div style="width: 80%; height: 100%; background: #f26622"></div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px">
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Carry-forward in</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 500; margin-top: 4px">10,942.300</div>
+                </div>
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Booked closing</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 500; margin-top: 4px">12,480.500</div>
+                </div>
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Transactions</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 500; margin-top: 4px">148</div>
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; margin-top: 18px">
+                <button onClick="{{ openClose }}" style="background: #f26622; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; transition: background 0.15s" style-hover="background: #c94f16">Close period</button>
+                <button onClick="{{ goPeriods }}" style="background: #ffffff; color: #111111; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 18px; cursor: pointer" style-hover="background: #f7f7f7; border-color: #9c9c9c">Period history</button>
+              </div>
+            </section>
+
+            <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px">
+              <h2 style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; margin: 0 0 14px">Compliance checks</h2>
+              <div style="display: grid; gap: 10px">
+                <sc-for list="{{ dashChecks }}" as="c" hint-placeholder-count="4">
+                  <div style="display: flex; gap: 10px; align-items: flex-start">
+                    <span style="width: 8px; height: 8px; border-radius: 999px; margin-top: 6px; flex: none; background: {{ c.color }}"></span>
+                    <div>
+                      <div style="font-size: 13px; font-weight: 600">{{ c.title }}</div>
+                      <div style="color: #6b6b6b; font-size: 13px">{{ c.detail }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+          </div>
+
+          <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 18px; gap: 12px">
+              <h2 style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; margin: 0">Recent transactions</h2>
+              <button onClick="{{ goTransactions }}" style="background: #ffffff; color: #111111; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 7px 14px; cursor: pointer" style-hover="background: #f7f7f7; border-color: #9c9c9c">View ledger</button>
+            </div>
+            <table style="width: 100%; border-collapse: collapse">
+              <thead>
+                <tr style="background: #111111">
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 18px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Date</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 18px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Type</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 18px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Reference</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 18px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Batch</th>
+                  <th style="text-align: right; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 18px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Quantity</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 18px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Document</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ recentRows }}" as="r" hint-placeholder-count="5">
+                  <tr style="background: {{ r.bg }}" style-hover="background: #fff0e8; box-shadow: inset 3px 0 0 #f26622">
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 18px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.date }}</td>
+                    <td style="padding: 9px 18px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: {{ r.typeColor }}">{{ r.type }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 18px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.ref }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 18px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.batch }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; text-align: right; padding: 9px 18px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.qty }}</td>
+                    <td style="padding: 9px 18px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto', sans-serif; font-size: 13px; color: #6b6b6b">{{ r.doc }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTransactions }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; gap: 12px">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+            <sc-for list="{{ txFilters }}" as="f" hint-placeholder-count="4">
+              <button onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button>
+            </sc-for>
+            <span style="margin-left: auto; font-family: 'Roboto', sans-serif; font-size: 13px; color: #6b6b6b">{{ txCount }}</span>
+          </div>
+          <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px">
+            <table style="width: 100%; border-collapse: collapse">
+              <thead>
+                <tr style="background: #111111">
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Date</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Type</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Reference</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Counterparty</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Batch</th>
+                  <th style="text-align: right; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Quantity</th>
+                  <th style="text-align: right; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">GHG</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Document</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ txRows }}" as="r" hint-placeholder-count="10">
+                  <tr style="background: {{ r.bg }}" style-hover="background: #fff0e8; box-shadow: inset 3px 0 0 #f26622">
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.date }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: {{ r.typeColor }}">{{ r.type }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.ref }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.party }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.batch }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; text-align: right; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.qty }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; text-align: right; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ r.ghg }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto', sans-serif; font-size: 13px; color: #6b6b6b">{{ r.doc }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isNewTx }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; align-items: start">
+          <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px">
+            <h2 style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; margin: 0 0 16px">Transaction details</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+              <div style="display: grid; gap: 6px">
+                <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Type</label>
+                <select value="{{ formType }}" onChange="{{ setType }}" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; color: #111111">
+                  <option value="INBOUND">INBOUND</option>
+                  <option value="OUTBOUND">OUTBOUND</option>
+                  <option value="CONVERSION">CONVERSION</option>
+                </select>
+              </div>
+              <div style="display: grid; gap: 6px">
+                <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Date</label>
+                <input type="text" value="{{ formDate }}" onChange="{{ setDate }}" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; font-family: 'Roboto', sans-serif; font-size: 13px; color: #111111" />
+              </div>
+              <div style="display: grid; gap: 6px">
+                <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Site</label>
+                <input type="text" value="KHPB Biomethane Plant · ISCC PLUS" readonly="" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; color: #6b6b6b" />
+              </div>
+              <div style="display: grid; gap: 6px">
+                <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Batch / pool</label>
+                <select value="{{ formBatch }}" onChange="{{ setBatch }}" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; font-family: 'Roboto', sans-serif; font-size: 13px; color: #111111">
+                  <option value="BM-2025-03">BM-2025-03 · Biomethane · POME</option>
+                  <option value="BM-2025-04">BM-2025-04 · Biomethane · EFB</option>
+                  <option value="LNG-2025-01">LNG-2025-01 · BioLNG · POME</option>
+                </select>
+              </div>
+              <div style="display: grid; gap: 6px">
+                <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Counterparty</label>
+                <input type="text" value="{{ formParty }}" onChange="{{ setParty }}" placeholder="Sime Darby Plantation" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; color: #111111" />
+              </div>
+              <div style="display: grid; gap: 6px">
+                <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">GHG value (gCO2eq/MJ)</label>
+                <input type="text" value="{{ formGhg }}" onChange="{{ setGhg }}" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; font-family: 'Roboto', sans-serif; font-size: 13px; color: #111111" />
+              </div>
+              <div style="display: grid; gap: 6px">
+                <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Quantity (MWh)</label>
+                <input type="text" value="{{ formQty }}" onChange="{{ setQty }}" placeholder="0.000" style="background: #f7f7f7; border-radius: 6px; padding: 9px 12px; font-family: 'Roboto', sans-serif; font-size: 13px; color: #111111; border: 1px solid {{ qtyBorder }}" />
+                <sc-if value="{{ qtyError }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; gap: 6px; align-items: flex-start; color: #d32f2f; font-size: 13px">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#d32f2f" stroke-width="1.75" style="margin-top: 3px; flex: none"><circle cx="8" cy="8" r="6"></circle><line x1="8" y1="5" x2="8" y2="9"></line><line x1="8" y1="11" x2="8" y2="11"></line></svg>
+                    <span>{{ qtyError }}</span>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="display: grid; gap: 6px">
+                <label style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Conversion factor</label>
+                <input type="text" value="{{ formCf }}" onChange="{{ setCf }}" style="background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; font-family: 'Roboto', sans-serif; font-size: 13px; color: #111111" />
+              </div>
+            </div>
+
+            <div style="margin-top: 18px; border: 1px solid {{ docBorder }}; border-radius: 6px; padding: 14px; background: #f7f7f7; display: flex; gap: 12px; align-items: center; justify-content: space-between">
+              <div>
+                <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Physical document (Rule 3)</div>
+                <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 4px">{{ docLabel }}</div>
+              </div>
+              <button onClick="{{ toggleDoc }}" style="background: #ffffff; color: #111111; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 18px; cursor: pointer; white-space: nowrap" style-hover="background: #ffffff; border-color: #9c9c9c">{{ docAction }}</button>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 18px">
+              <button onClick="{{ submitTx }}" style="background: #f26622; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; transition: background 0.15s" style-hover="background: #c94f16">Post to ledger</button>
+              <button onClick="{{ goTransactions }}" style="background: #ffffff; color: #111111; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 18px; cursor: pointer" style-hover="background: #f7f7f7; border-color: #9c9c9c">Cancel</button>
+            </div>
+          </section>
+
+          <div style="display: grid; gap: 12px">
+            <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px">
+              <h2 style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; margin: 0 0 4px">Pre-submit rule check</h2>
+              <p style="color: #6b6b6b; margin: 0 0 14px; font-size: 13px">Evaluated against the same server-side checks that will accept or reject this write.</p>
+              <div style="display: grid; gap: 8px">
+                <sc-for list="{{ formRules }}" as="r" hint-placeholder-count="8">
+                  <div style="display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 6px; background: {{ r.bg }}">
+                    <span style="font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 600; color: {{ r.color }}">{{ r.mark }}</span>
+                    <div>
+                      <div style="font-size: 13px; font-weight: 600">{{ r.title }}</div>
+                      <div style="color: #6b6b6b; font-size: 13px">{{ r.detail }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+            <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px">
+              <h2 style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; margin: 0 0 14px">Resulting balance</h2>
+              <div style="font-family: 'Roboto', sans-serif; font-size: 13px; display: grid; gap: 8px">
+                <div style="display: flex; justify-content: space-between"><span style="color: #6b6b6b">A opening</span><span>10,942.300</span></div>
+                <div style="display: flex; justify-content: space-between"><span style="color: #6b6b6b">a this entry</span><span>{{ formQtyPreview }}</span></div>
+                <div style="display: flex; justify-content: space-between"><span style="color: #6b6b6b">CF</span><span>{{ formCf }}</span></div>
+                <div style="display: flex; justify-content: space-between"><span style="color: #6b6b6b">b adjustment</span><span>-12.500</span></div>
+                <div style="display: flex; justify-content: space-between; border-top: 1px solid #e5e5e5; padding-top: 8px; font-weight: 600"><span>B closing</span><span>{{ formBPreview }}</span></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isBatches }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px">
+          <sc-for list="{{ pools }}" as="p" hint-placeholder-count="6">
+            <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; transition: box-shadow 0.15s" style-hover="box-shadow: 0 4px 12px rgba(17,17,17,0.08)">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+                <div style="font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600">{{ p.id }}</div>
+                <span style="border-radius: 999px; padding: 3px 10px; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid #e5e5e5; color: #6b6b6b">{{ p.scheme }}</span>
+              </div>
+              <div style="color: #6b6b6b; font-size: 13px; margin-top: 6px">{{ p.desc }}</div>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px">
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Opening</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ p.opening }}</div>
+                </div>
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">GHG value</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ p.ghg }}</div>
+                </div>
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">In / out</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ p.inout }}</div>
+                </div>
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Balance</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600; margin-top: 3px">{{ p.balance }}</div>
+                </div>
+              </div>
+              <div style="margin-top: 16px; display: grid; gap: 6px">
+                <div style="display: flex; justify-content: space-between; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #9c9c9c"><span>Booked in</span><span>Booked out</span></div>
+                <div style="height: 8px; background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 999px; overflow: hidden"><div style="height: 100%; background: #111111; width: {{ p.inW }}"></div></div>
+                <div style="height: 8px; background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 999px; overflow: hidden"><div style="height: 100%; background: #f26622; width: {{ p.outW }}"></div></div>
+              </div>
+              <button onClick="{{ openConversion }}" style="margin-top: 14px; background: #ffffff; color: #c94f16; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 8px 14px; cursor: pointer; width: 100%" style-hover="background: #fff0e8; border-color: #f26622">Conversion trace</button>
+            </section>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTransfers }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; gap: 12px">
+          <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; display: flex; gap: 12px; align-items: flex-start">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#1976d2" stroke-width="1.75" style="margin-top: 3px; flex: none"><circle cx="8" cy="8" r="6"></circle><line x1="8" y1="7" x2="8" y2="11"></line><line x1="8" y1="5" x2="8" y2="5"></line></svg>
+            <div>
+              <div style="font-size: 13px; font-weight: 600">Transfers run one way, ISCC EU to ISCC PLUS</div>
+              <div style="color: #6b6b6b; font-size: 13px">Rule 7 rejects any PLUS to EU write. The receiving pool inherits the worst-case GHG value of the merged volumes (Rule 6).</div>
+            </div>
+          </div>
+          <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px">
+            <table style="width: 100%; border-collapse: collapse">
+              <thead>
+                <tr style="background: #111111">
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Date</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">From site</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">To site</th>
+                  <th style="text-align: right; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Volume</th>
+                  <th style="text-align: right; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">GHG applied</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">State</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ transfers }}" as="t" hint-placeholder-count="4">
+                  <tr style="background: {{ t.bg }}" style-hover="background: #fff0e8; box-shadow: inset 3px 0 0 #f26622">
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ t.date }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ t.from }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ t.to }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; text-align: right; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ t.volume }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; text-align: right; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ t.ghg }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: {{ t.color }}">{{ t.state }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSites }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; gap: 12px">
+          <sc-for list="{{ sites }}" as="s" hint-placeholder-count="3">
+            <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; display: grid; grid-template-columns: 1.6fr repeat(4, 1fr); gap: 16px; align-items: center">
+              <div>
+                <div style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600">{{ s.name }}</div>
+                <div style="color: #6b6b6b; font-size: 13px">{{ s.location }}</div>
+              </div>
+              <div>
+                <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Scheme</div>
+                <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ s.scheme }}</div>
+              </div>
+              <div>
+                <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Role</div>
+                <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ s.role }}</div>
+              </div>
+              <div>
+                <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Certificate</div>
+                <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ s.cert }}</div>
+              </div>
+              <div>
+                <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Balance</div>
+                <div style="font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600; margin-top: 3px">{{ s.balance }}</div>
+              </div>
+            </section>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPeriods }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; gap: 16px">
+          <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px">
+            <h2 style="font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; margin: 0 0 14px">Period continuity</h2>
+            <div style="display: flex; gap: 4px">
+              <sc-for list="{{ periodStrip }}" as="p" hint-placeholder-count="4">
+                <div style="flex: 1; display: grid; gap: 6px">
+                  <div style="height: 10px; border-radius: 3px; background: {{ p.color }}"></div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 500">{{ p.label }}</div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #9c9c9c">{{ p.state }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <p style="color: #6b6b6b; margin: 14px 0 0; font-size: 13px">No gap between any two consecutive periods, so Rule 2 holds across the whole chain.</p>
+          </section>
+          <sc-for list="{{ periods }}" as="p" hint-placeholder-count="3">
+            <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; position: relative; overflow: hidden">
+              <sc-if value="{{ p.isClosed }}" hint-placeholder-val="{{ false }}">
+                <div style="position: absolute; right: 18px; top: 22px; transform: rotate(-7deg); border: 2px solid rgba(17,17,17,0.16); border-radius: 6px; padding: 5px 12px; font-family: 'Roboto Condensed', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(17,17,17,0.16); pointer-events: none">Closed &amp; locked</div>
+              </sc-if>
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                <div style="font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600">{{ p.label }}</div>
+                <span style="border-radius: 999px; padding: 3px 10px; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #ffffff; background: {{ p.stateColor }}">{{ p.state }}</span>
+                <span style="font-family: 'Roboto', sans-serif; font-size: 13px; color: #6b6b6b">{{ p.range }}</span>
+                <sc-if value="{{ p.isOpen }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ openClose }}" style="margin-left: auto; background: #f26622; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; transition: background 0.15s" style-hover="background: #c94f16">Close period</button>
+                </sc-if>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px">
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b; text-transform: none">OPENING (A)</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ p.opening }}</div>
+                </div>
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b; text-transform: none">INBOUND (a)</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ p.inbound }}</div>
+                </div>
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b; text-transform: none">CLOSING (B)</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ p.closing }}</div>
+                </div>
+                <div>
+                  <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Carry-forward</div>
+                  <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 3px">{{ p.carry }}</div>
+                </div>
+              </div>
+            </section>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isUsers }}" hint-placeholder-val="{{ false }}">
+        <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead>
+              <tr style="background: #111111">
+                <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Name</th>
+                <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Email</th>
+                <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Role</th>
+                <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Can close periods</th>
+                <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Last active</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ users }}" as="u" hint-placeholder-count="4">
+                <tr style="background: {{ u.bg }}" style-hover="background: #fff0e8; box-shadow: inset 3px 0 0 #f26622">
+                  <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-weight: 600">{{ u.name }}</td>
+                  <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; color: #6b6b6b">{{ u.email }}</td>
+                  <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto', sans-serif; font-size: 13px">{{ u.role }}</td>
+                  <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: {{ u.closeColor }}">{{ u.canClose }}</td>
+                  <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto', sans-serif; font-size: 13px; color: #6b6b6b">{{ u.last }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{ isAudit }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; gap: 12px">
+          <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; display: flex; gap: 12px; align-items: flex-start">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#2e7d32" stroke-width="1.75" style="margin-top: 3px; flex: none"><circle cx="8" cy="8" r="6"></circle><polyline points="5.2,8.3 7.2,10.3 10.8,6"></polyline></svg>
+            <div>
+              <div style="font-size: 13px; font-weight: 600">Append-only, gapless. Sequence 1 to 4,318 with no missing entry.</div>
+              <div style="color: #6b6b6b; font-size: 13px">There is no update or delete path in the API, so a correction is a new entry that references the one it supersedes.</div>
+            </div>
+          </div>
+          <section style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px">
+            <table style="width: 100%; border-collapse: collapse">
+              <thead>
+                <tr style="background: #111111">
+                  <th style="text-align: right; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Seq</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Timestamp</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Actor</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Action</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)">Entity</th>
+                  <th style="text-align: left; color: #ffffff; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 9px 16px; position: sticky; top: 0; z-index: 2; background: #111111; border-right: 1px solid rgba(255,255,255,0.16)"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ auditRows }}" as="a" hint-placeholder-count="8">
+                  <tr style="background: {{ a.bg }}" style-hover="background: #fff0e8; box-shadow: inset 3px 0 0 #f26622">
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; text-align: right; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; color: #6b6b6b">{{ a.seq }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ a.ts }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ a.actor }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: {{ a.color }}">{{ a.action }}</td>
+                    <td style="font-family: 'Roboto', sans-serif; font-size: 13px; padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0">{{ a.entity }}</td>
+                    <td style="padding: 9px 16px; border-top: 1px solid #e5e5e5; border-right: 1px solid #f0f0f0; text-align: right">
+                      <button onClick="{{ a.onClick }}" style="background: #ffffff; color: #c94f16; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px" style-hover="background: #fff0e8; border-color: #f26622">Before / after</button>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </sc-if>
+
+    </div>
+    </div>
+  </main>
+</div>
+</sc-if>
+
+<sc-if value="{{ showClose }}" hint-placeholder-val="{{ false }}">
+  <div style="position: fixed; inset: 0; background: rgba(17,17,17,0.45); display: grid; place-items: center; padding: 24px; z-index: 40">
+    <div style="width: 620px; max-width: 100%; max-height: 88vh; overflow: auto; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 24px; animation: min 0.15s ease-out">
+      <h2 style="font-family: 'Roboto Slab', serif; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 0">Close period 2025-Q2</h2>
+      <p style="color: #6b6b6b; margin: 6px 0 18px">Mar 2025 to May 2025, KHPB Biomethane Plant. Closing writes the closing balance and carry-forward, then locks every transaction in the period.</p>
+
+      <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 14px; background: #f7f7f7; display: grid; gap: 10px; margin-bottom: 16px">
+        <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Physical stock reading (Rule 8)</div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+          <input type="text" value="{{ stockValue }}" onChange="{{ setStock }}" style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 12px; font-family: 'Roboto', sans-serif; font-size: 13px; width: 160px; color: #111111" />
+          <span style="font-family: 'Roboto', sans-serif; font-size: 13px; color: #6b6b6b">MWh measured on site vs 12,480.500 booked</span>
+        </div>
+        <div style="font-family: 'Roboto', sans-serif; font-size: 13px; color: {{ toleranceColor }}">{{ toleranceText }}</div>
+      </div>
+
+      <div style="display: grid; gap: 8px">
+        <sc-for list="{{ closeRules }}" as="r" hint-placeholder-count="8">
+          <div style="display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 6px; background: {{ r.bg }}">
+            <span style="font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 600; color: {{ r.color }}">{{ r.mark }}</span>
+            <div>
+              <div style="font-size: 13px; font-weight: 600">{{ r.title }}</div>
+              <div style="color: #6b6b6b; font-size: 13px">{{ r.detail }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end">
+        <button onClick="{{ closeModal }}" style="background: #ffffff; color: #111111; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 18px; cursor: pointer" style-hover="background: #f7f7f7; border-color: #9c9c9c">Keep working</button>
+        <button onClick="{{ confirmClose }}" style="background: #f26622; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; transition: background 0.15s" style-hover="background: #c94f16">Close and lock period</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showReject }}" hint-placeholder-val="{{ false }}">
+  <div style="position: fixed; inset: 0; background: rgba(17,17,17,0.55); display: grid; place-items: center; padding: 24px; z-index: 50">
+    <div style="width: 520px; max-width: 100%; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 24px; animation: min 0.15s ease-out">
+      <div style="display: flex; gap: 12px; align-items: flex-start">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="#d32f2f" stroke-width="1.75" style="margin-top: 4px; flex: none"><circle cx="8" cy="8" r="6"></circle><line x1="8" y1="4.5" x2="8" y2="8.5"></line><line x1="8" y1="11" x2="8" y2="11"></line></svg>
+        <div>
+          <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #d32f2f">Write rejected · {{ rejectRule }}</div>
+          <h2 style="font-family: 'Roboto Slab', serif; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 6px 0 0">{{ rejectTitle }}</h2>
+          <p style="color: #6b6b6b; margin: 8px 0 0">{{ rejectBody }}</p>
+          <div style="font-family: 'Roboto', sans-serif; font-size: 13px; background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px; margin-top: 14px; color: #6b6b6b; white-space: pre-line">{{ rejectTrace }}</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end">
+        <button onClick="{{ closeReject }}" style="background: #f26622; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; transition: background 0.15s" style-hover="background: #c94f16">Back to entry</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showConversion }}" hint-placeholder-val="{{ false }}">
+  <div style="position: fixed; inset: 0; background: rgba(17,17,17,0.45); display: grid; place-items: center; padding: 24px; z-index: 40">
+    <div style="width: 560px; max-width: 100%; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 24px; animation: min 0.15s ease-out">
+      <h2 style="font-family: 'Roboto Slab', serif; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 0">Conversion trace, BM-2025-03</h2>
+      <p style="color: #6b6b6b; margin: 6px 0 18px">Upgrading run 2025-04-18, biomethane to BioLNG. Every input to the formula is stored on the transaction, so the number can be re-derived at audit.</p>
+      <div style="font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600; background: #111111; color: #ffffff; border-radius: 6px; padding: 14px; text-align: center">B = (A + a) × CF + b</div>
+      <div style="display: grid; gap: 10px; margin-top: 16px; font-family: 'Roboto', sans-serif; font-size: 13px">
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #e5e5e5; padding-bottom: 8px"><span style="color: #6b6b6b">A opening pool</span><span>1,240.000 MWh</span></div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #e5e5e5; padding-bottom: 8px"><span style="color: #6b6b6b">a inbound this period</span><span>860.000 MWh</span></div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #e5e5e5; padding-bottom: 8px"><span style="color: #6b6b6b">CF liquefaction factor</span><span>0.9820</span></div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #e5e5e5; padding-bottom: 8px"><span style="color: #6b6b6b">b process loss adjustment</span><span>-12.500 MWh</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 600; padding-top: 4px"><span>B closing</span><span>2,049.700 MWh</span></div>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px">
+        <span style="width: 8px; height: 8px; border-radius: 999px; background: #f9a825; margin-top: 6px; flex: none"></span>
+        <div style="font-size: 13px">Merged GHG value takes the worst case of the two pools, 18.9 gCO2eq/MJ, not the weighted average (Rule 6).</div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end">
+        <button onClick="{{ closeModal }}" style="background: #ffffff; color: #111111; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 18px; cursor: pointer" style-hover="background: #f7f7f7; border-color: #9c9c9c">Close</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showAudit }}" hint-placeholder-val="{{ false }}">
+  <div style="position: fixed; inset: 0; background: rgba(17,17,17,0.45); display: grid; place-items: center; padding: 24px; z-index: 40">
+    <div style="width: 560px; max-width: 100%; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 24px; animation: min 0.15s ease-out">
+      <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">Audit entry {{ auditSeq }}</div>
+      <h2 style="font-family: 'Roboto Slab', serif; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 6px 0 0">{{ auditTitle }}</h2>
+      <p style="color: #6b6b6b; margin: 6px 0 18px">{{ auditMeta }}</p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+        <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px; background: #f7f7f7">
+          <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">before_value</div>
+          <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 8px; white-space: pre-line">{{ auditBefore }}</div>
+        </div>
+        <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px; background: #f7f7f7">
+          <div style="font-family: 'Roboto Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b6b6b">after_value</div>
+          <div style="font-family: 'Roboto', sans-serif; font-size: 13px; margin-top: 8px; white-space: pre-line">{{ auditAfter }}</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end">
+        <button onClick="{{ closeModal }}" style="background: #ffffff; color: #111111; font-weight: 600; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 18px; cursor: pointer" style-hover="background: #f7f7f7; border-color: #9c9c9c">Close</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+  <div style="position: fixed; right: 24px; bottom: 24px; z-index: 60; background: #111111; color: #ffffff; border-radius: 6px; padding: 14px 16px; max-width: 380px; display: flex; gap: 10px; align-items: flex-start; animation: tin 0.15s ease-out">
+    <span style="width: 8px; height: 8px; border-radius: 999px; margin-top: 6px; flex: none; background: {{ toastColor }}"></span>
+    <div>
+      <div style="font-size: 13px; font-weight: 600">{{ toastTitle }}</div>
+      <div style="font-size: 13px; color: rgba(255,255,255,0.7)">{{ toast }}</div>
+    </div>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startLoggedIn&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Demo state&quot;},&quot;initialScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dashboard&quot;,&quot;transactions&quot;,&quot;newtx&quot;,&quot;batches&quot;,&quot;transfers&quot;,&quot;sites&quot;,&quot;periods&quot;,&quot;users&quot;,&quot;audit&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Demo state&quot;},&quot;strictTolerance&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Rules&quot;}}">
+const NAV = "display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;border-radius:6px;padding:9px 8px;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:background 0.15s;";
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      authed: props.startLoggedIn === true,
+      screen: props.initialScreen || "dashboard",
+      modal: null,
+      toast: null,
+      toastTitle: "",
+      toastColor: "#2e7d32",
+      filter: "All",
+      stock: "12352.100",
+      docAttached: false,
+      qtyError: "",
+      reject: null,
+      auditPick: null,
+      q2Closed: false,
+      form: { type: "INBOUND", date: "2025-05-14", batch: "BM-2025-03", party: "", ghg: "18.4", qty: "", cf: "1.0000" },
+      extraRows: []
+    };
+  }
+
+  tolerance() {
+    const booked = 12480.5;
+    const phys = parseFloat(String(this.state.stock).replace(/,/g, ""));
+    const limit = this.props.strictTolerance === false ? 1 : 0.5;
+    if (!isFinite(phys)) return { ok: false, pct: null, limit: limit };
+    const pct = Math.abs(booked - phys) / booked * 100;
+    return { ok: pct <= limit, pct: pct, limit: limit, phys: phys };
+  }
+
+  navBg(key, screen) { const a = screen === key || (key === "transactions" && screen === "newtx"); return a ? "#f26622" : "transparent"; }
+  go(screen) { return () => { clearTimeout(this._l); this.setState({ screen: screen, modal: null, loading: true }); this._l = setTimeout(() => this.setState({ loading: false }), 340); }; }
+  fire(title, msg, color) {
+    clearTimeout(this._t);
+    this.setState({ toast: msg, toastTitle: title, toastColor: color || "#2e7d32" });
+    this._t = setTimeout(() => this.setState({ toast: null }), 4200);
+  }
+  set(field) { return e => this.setState({ form: Object.assign({}, this.state.form, { [field]: e.target.value }), qtyError: field === "qty" ? "" : this.state.qtyError }); }
+
+  qtyNum() { const n = parseFloat(String(this.state.form.qty).replace(/,/g, "")); return isFinite(n) ? n : null; }
+
+  submitTx = () => {
+    const q = this.qtyNum();
+    if (q === null || q <= 0) {
+      this.setState({ qtyError: "Quantity must be a positive number. Rule 5 rejects any write that would drive a pool balance below zero." });
+      this.fire("Not posted", "One field failed validation before the write was attempted.", "#d32f2f");
+      return;
+    }
+    if (this.state.form.type === "INBOUND" && !this.state.docAttached) {
+      this.setState({ modal: "reject", reject: {
+        rule: "Rule 3",
+        title: "Inbound volume needs a physical document",
+        body: "An inbound booking must reference a weighbridge ticket or delivery note before it can enter the mass balance. Attach the document, then post again.",
+        trace: "POST /api/transactions → 422\nreason: physical_document_required\nfield: documentId (null)\nsite: KHPB Biomethane Plant (ISCC_PLUS)"
+      }});
+      return;
+    }
+    const f = this.state.form;
+    const row = {
+      date: f.date, type: f.type, ref: "TX-2025-0149", party: f.party || "Unassigned", batch: f.batch,
+      qty: q.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
+      ghg: f.ghg, doc: this.state.docAttached ? "WB-88214" : "—",
+      typeColor: f.type === "INBOUND" ? "#2e7d32" : f.type === "OUTBOUND" ? "#1976d2" : "#96690e"
+    };
+    this.setState({ extraRows: [row].concat(this.state.extraRows), screen: "transactions", qtyError: "" });
+    this.fire("Posted and logged", "TX-2025-0149 accepted. Audit sequence 4,319 written.", "#2e7d32");
+  };
+
+  confirmClose = () => {
+    const t = this.tolerance();
+    if (!t.ok) {
+      this.setState({ modal: "reject", reject: {
+        rule: "Rule 8",
+        title: "Booked stock and physical stock differ by more than " + t.limit + "%",
+        body: "The period cannot close while the measured reading and the booked balance disagree beyond tolerance. Re-check the meter reading or book the missing volume, then close again.",
+        trace: "POST /api/periods/2025-Q2/close → 422\nreason: stock_tolerance_exceeded\nbooked: 12480.500 MWh\nphysical: " + (t.phys || 0).toFixed(3) + " MWh\ndelta: " + (t.pct || 0).toFixed(3) + "% (limit " + t.limit + "%)"
+      }});
+      return;
+    }
+    this.setState({ modal: null, q2Closed: true, screen: "periods" });
+    this.fire("Period 2025-Q2 closed", "Closing balance 12,480.500 MWh locked. Carry-forward opened into 2025-Q3.", "#2e7d32");
+  };
+
+  renderVals() {
+    const s = this.state;
+    const t = this.tolerance();
+    const bg = i => (i % 2 === 0 ? "#ffffff" : "#f7f7f7");
+    const q = this.qtyNum();
+
+    const titles = {
+      dashboard: ["Dashboard", "KHPB Biomethane Plant, balancing period 2025-Q2. All figures are ledger values, not estimates."],
+      transactions: ["Transaction ledger", "Inbound, outbound and conversion events booked against the open period."],
+      newtx: ["New transaction", "Every field is checked server-side before the write is accepted."],
+      batches: ["Batches and pools", "Material pooled by scheme, feedstock, origin and GHG value."],
+      transfers: ["Scheme transfers", "Volume moved between ISCC EU and ISCC PLUS sites."],
+      sites: ["Sites", "Certified sites under KHPB Energy Sdn Bhd."],
+      periods: ["Balancing periods", "Maximum three months each, with no gaps between them."],
+      users: ["Users and roles", "Three roles. Only SUPER_ADMIN and COMPANY_ADMIN can close a period."],
+      audit: ["Audit log", "Append-only record of every accepted write."]
+    };
+    const tt = titles[s.screen] || titles.dashboard;
+
+    const seedRows = [
+      { date: "2025-05-12", type: "INBOUND", ref: "TX-2025-0148", party: "Sime Darby Plantation", batch: "BM-2025-03", qty: "1,842.600", ghg: "18.4", doc: "WB-88207" },
+      { date: "2025-05-09", type: "CONVERSION", ref: "TX-2025-0147", party: "Internal upgrading", batch: "LNG-2025-01", qty: "620.400", ghg: "18.9", doc: "PR-2025-041" },
+      { date: "2025-05-06", type: "OUTBOUND", ref: "TX-2025-0146", party: "Petronas Gas Berhad", batch: "BM-2025-03", qty: "2,410.000", ghg: "18.4", doc: "DN-55102" },
+      { date: "2025-05-02", type: "INBOUND", ref: "TX-2025-0145", party: "KL Kepong Oleo", batch: "BM-2025-04", qty: "980.250", ghg: "21.1", doc: "WB-88190" },
+      { date: "2025-04-28", type: "OUTBOUND", ref: "TX-2025-0144", party: "Gas Malaysia Energy", batch: "BM-2025-03", qty: "1,150.000", ghg: "18.4", doc: "DN-55088" },
+      { date: "2025-04-24", type: "INBOUND", ref: "TX-2025-0143", party: "Sime Darby Plantation", batch: "BM-2025-03", qty: "1,706.900", ghg: "18.4", doc: "WB-88171" },
+      { date: "2025-04-18", type: "CONVERSION", ref: "TX-2025-0142", party: "Internal upgrading", batch: "LNG-2025-01", qty: "2,049.700", ghg: "18.9", doc: "PR-2025-038" },
+      { date: "2025-04-15", type: "OUTBOUND", ref: "TX-2025-0141", party: "Petronas Gas Berhad", batch: "BM-2025-04", qty: "740.000", ghg: "21.1", doc: "DN-55071" },
+      { date: "2025-04-09", type: "INBOUND", ref: "TX-2025-0140", party: "Kilang Sawit Bintang", batch: "BM-2025-04", qty: "1,320.500", ghg: "21.1", doc: "WB-88154" },
+      { date: "2025-04-03", type: "INBOUND", ref: "TX-2025-0139", party: "Sime Darby Plantation", batch: "BM-2025-03", qty: "2,088.400", ghg: "18.4", doc: "WB-88140" }
+    ].map(r => Object.assign({}, r, { typeColor: r.type === "INBOUND" ? "#2e7d32" : r.type === "OUTBOUND" ? "#1976d2" : "#96690e" }));
+
+    const all = s.extraRows.concat(seedRows);
+    const filtered = s.filter === "All" ? all : all.filter(r => r.type === s.filter.toUpperCase());
+    const txRows = filtered.map((r, i) => Object.assign({}, r, { bg: bg(i) }));
+    const filterBtn = label => ({
+      label: label,
+      onClick: () => this.setState({ filter: label }),
+      style: "border-radius:6px;padding:8px 14px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;" +
+        (s.filter === label ? "background:#ffffff;border:1px solid #f26622;color:#c94f16;" : "background:#ffffff;border:1px solid #e5e5e5;color:#6b6b6b;")
+    });
+
+    const ruleRow = (n, title, ok, detail) => ({
+      title: "Rule " + n + " · " + title,
+      detail: detail,
+      mark: ok ? "PASS" : "FAIL",
+      color: ok ? "#2e7d32" : "#d32f2f",
+      bg: ok ? "#f7f7f7" : "#fdf1f1"
+    });
+
+    const inbound = s.form.type === "INBOUND";
+    const formRules = [
+      ruleRow(1, "Site isolation", true, "Write is scoped to KHPB Biomethane Plant under company KHPB Energy."),
+      ruleRow(2, "Period continuity", true, "2025-05-14 falls inside open period 2025-Q2, which follows 2025-Q1 with no gap."),
+      ruleRow(3, "Physical document for inbound", !inbound || s.docAttached, inbound ? (s.docAttached ? "Weighbridge ticket WB-88214 linked." : "Inbound volume requires a weighbridge ticket or delivery note.") : "Not applicable to a " + s.form.type.toLowerCase() + " entry."),
+      ruleRow(4, "Balance stays non-negative", q === null || q > 0, q === null ? "Enter a quantity to evaluate the resulting pool balance." : "Pool " + s.form.batch + " would hold " + (10942.3 + q).toFixed(3) + " MWh after this write."),
+      ruleRow(5, "Positive quantity", q !== null && q > 0, q !== null && q > 0 ? "Quantity parses as a positive decimal with three places." : "Quantity must be greater than zero."),
+      ruleRow(6, "Worst-case GHG on merge", true, "Merging into " + s.form.batch + " applies the higher of 18.4 and " + s.form.ghg + " gCO2eq/MJ."),
+      ruleRow(7, "Scheme direction", true, "No cross-scheme movement in this entry, so the EU to PLUS restriction does not apply."),
+      ruleRow(8, "Stock tolerance", true, "Checked at period close, not at entry.")
+    ];
+
+    const closeRules = [
+      ruleRow(1, "Site isolation", true, "All 148 transactions belong to one site and one company."),
+      ruleRow(2, "Period continuity", true, "2025-Q2 starts the day after 2025-Q1 closed, so the chain has no gap."),
+      ruleRow(3, "Physical documents present", true, "62 inbound bookings, 62 linked documents."),
+      ruleRow(4, "No negative balance", true, "Lowest intra-period pool balance was 1,204.100 MWh on 2025-03-27."),
+      ruleRow(5, "Carry-forward cap", true, "ISCC PLUS site, so carry-forward is uncapped. The EU physical-stock cap does not apply."),
+      ruleRow(6, "Worst-case GHG applied", true, "Two merges in this period both took the higher GHG value."),
+      ruleRow(7, "Scheme direction", true, "One transfer, EU to PLUS. No reverse movement recorded."),
+      ruleRow(8, "Booked vs physical stock within " + t.limit + "%", t.ok, t.pct === null ? "Enter a physical stock reading." : "Measured reading differs from the booked balance by " + t.pct.toFixed(3) + "%.")
+    ];
+
+    const audits = [
+      { seq: "4,318", ts: "2025-05-14 09:41", actor: "A. Rahman", action: "CLOSE_ATTEMPT", entity: "Period 2025-Q2", color: "#d32f2f", title: "Period close rejected", meta: "Rule 8 tolerance breach, no state change written.", before: "state: OPEN\nclosing: null", after: "state: OPEN\nrejection: stock_tolerance_exceeded" },
+      { seq: "4,317", ts: "2025-05-12 16:08", actor: "S. Lim", action: "CREATE", entity: "TX-2025-0148", color: "#2e7d32", title: "Inbound booked", meta: "1,842.600 MWh into BM-2025-03, document WB-88207.", before: "null", after: "qty: 1842.600\nbatch: BM-2025-03\ndoc: WB-88207" },
+      { seq: "4,316", ts: "2025-05-09 11:22", actor: "S. Lim", action: "CONVERT", entity: "TX-2025-0147", color: "#96690e", title: "Conversion posted", meta: "CF 0.9820 applied, worst-case GHG 18.9 carried to BioLNG pool.", before: "pool: 1240.000", after: "pool: 2049.700\ncf: 0.9820" },
+      { seq: "4,315", ts: "2025-05-06 14:55", actor: "S. Lim", action: "CREATE", entity: "TX-2025-0146", color: "#2e7d32", title: "Outbound booked", meta: "2,410.000 MWh to Petronas Gas Berhad, delivery note DN-55102.", before: "null", after: "qty: 2410.000\ndoc: DN-55102" },
+      { seq: "4,314", ts: "2025-05-05 08:30", actor: "A. Rahman", action: "TRANSFER", entity: "ST-2025-004", color: "#1976d2", title: "Scheme transfer accepted", meta: "EU to PLUS, 480.000 MWh, direction check passed.", before: "eu_pool: 3120.000", after: "eu_pool: 2640.000\nplus_pool: +480.000" },
+      { seq: "4,313", ts: "2025-05-02 10:14", actor: "N. Farid", action: "CREATE", entity: "TX-2025-0145", color: "#2e7d32", title: "Inbound booked", meta: "980.250 MWh into BM-2025-04, document WB-88190.", before: "null", after: "qty: 980.250\nghg: 21.1" },
+      { seq: "4,312", ts: "2025-04-30 17:02", actor: "A. Rahman", action: "CLOSE", entity: "Period 2025-Q1", color: "#111111", title: "Period closed", meta: "Closing balance 10,942.300 MWh, carry-forward opened into 2025-Q2.", before: "state: OPEN", after: "state: CLOSED\nclosing: 10942.300" },
+      { seq: "4,311", ts: "2025-04-28 13:47", actor: "N. Farid", action: "CREATE", entity: "TX-2025-0144", color: "#2e7d32", title: "Outbound booked", meta: "1,150.000 MWh to Gas Malaysia Energy.", before: "null", after: "qty: 1150.000\ndoc: DN-55088" }
+    ];
+    const auditRows = audits.map((a, i) => Object.assign({}, a, { bg: bg(i), onClick: () => this.setState({ modal: "audit", auditPick: a }) }));
+    const pick = s.auditPick || audits[0];
+
+    const q2 = s.q2Closed;
+    const periods = [
+      { label: "2025-Q3", state: "OPEN", range: "Jun 2025 to Aug 2025", opening: "12,480.500", inbound: "0.000", closing: "—", carry: "pending", stateColor: "#f26622", isOpen: true, isClosed: false, hidden: !q2 },
+      { label: "2025-Q2", state: q2 ? "CLOSED" : "OPEN", range: "Mar 2025 to May 2025", opening: "10,942.300", inbound: "8,938.650", closing: q2 ? "12,480.500" : "12,480.500 (provisional)", carry: q2 ? "12,480.500" : "pending", stateColor: q2 ? "#111111" : "#f26622", isOpen: !q2, isClosed: q2 },
+      { label: "2025-Q1", state: "CLOSED", range: "Dec 2024 to Feb 2025", opening: "8,204.900", inbound: "7,412.300", closing: "10,942.300", carry: "10,942.300", stateColor: "#111111", isOpen: false, isClosed: true },
+      { label: "2024-Q4", state: "CLOSED", range: "Sep 2024 to Nov 2024", opening: "0.000", inbound: "11,880.400", closing: "8,204.900", carry: "8,204.900", stateColor: "#111111", isOpen: false, isClosed: true }
+    ].filter(p => !p.hidden);
+
+    const poolSeed = [
+      { id: "BM-2025-03", scheme: "ISCC PLUS", desc: "Biomethane · POME · Malaysia · Sime Darby", opening: "4,120.000", ghg: "18.4", inN: 5637.9, outN: 3560, balance: "6,197.900" },
+      { id: "BM-2025-04", scheme: "ISCC PLUS", desc: "Biomethane · EFB · Malaysia · KL Kepong", opening: "1,880.400", ghg: "21.1", inN: 2300.75, outN: 740, balance: "3,441.150" },
+      { id: "BM-2024-11", scheme: "ISCC EU", desc: "Biomethane · POME · Indonesia · Musim Mas", opening: "2,640.000", ghg: "16.8", inN: 0, outN: 480, balance: "2,160.000" },
+      { id: "BM-2024-09", scheme: "ISCC EU", desc: "Biomethane · Manure · Netherlands · Nedmag", opening: "681.450", ghg: "14.2", inN: 0, outN: 0, balance: "681.450" },
+      { id: "LNG-2025-01", scheme: "ISCC PLUS", desc: "BioLNG · POME · Malaysia · internal upgrading", opening: "1,240.000", ghg: "18.9", inN: 2670.1, outN: 1412, balance: "2,498.100" },
+      { id: "LNG-2024-12", scheme: "ISCC PLUS", desc: "BioLNG · EFB · Malaysia · internal upgrading", opening: "820.650", ghg: "21.4", inN: 0, outN: 176, balance: "644.650" }
+    ];
+    const poolMax = Math.max.apply(null, poolSeed.map(p => Math.max(p.inN, p.outN))) || 1;
+    const fmt3 = n => n.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    const pools = poolSeed.map(p => Object.assign({}, p, {
+      inout: fmt3(p.inN) + " / " + fmt3(p.outN),
+      inW: (p.inN / poolMax * 100).toFixed(1) + "%",
+      outW: (p.outN / poolMax * 100).toFixed(1) + "%"
+    }));
+    const periodStrip = periods.slice().reverse().map(p => ({
+      label: p.label, state: p.state, color: p.state === "OPEN" ? "#f26622" : "#111111"
+    }));
+
+    return {
+      periodStrip: periodStrip,
+      loggedIn: s.authed, loggedOut: !s.authed,
+      login: () => this.setState({ authed: true }), logout: () => this.setState({ authed: false, screen: "dashboard", modal: null }),
+      pageTitle: tt[0], pageSubtitle: tt[1],
+      isLoading: !!s.loading,
+      isDashboard: s.screen === "dashboard" && !s.loading, isTransactions: s.screen === "transactions" && !s.loading, isNewTx: s.screen === "newtx" && !s.loading,
+      isBatches: s.screen === "batches" && !s.loading, isTransfers: s.screen === "transfers" && !s.loading, isSites: s.screen === "sites" && !s.loading,
+      isPeriods: s.screen === "periods" && !s.loading, isUsers: s.screen === "users" && !s.loading, isAudit: s.screen === "audit" && !s.loading,
+      navDashboardBg: this.navBg("dashboard", s.screen), navTransactionsBg: this.navBg("transactions", s.screen), navBatchesBg: this.navBg("batches", s.screen),
+      navTransfersBg: this.navBg("transfers", s.screen), navSitesBg: this.navBg("sites", s.screen), navPeriodsBg: this.navBg("periods", s.screen),
+      navUsersBg: this.navBg("users", s.screen), navAuditBg: this.navBg("audit", s.screen),
+      goDashboard: this.go("dashboard"), goTransactions: this.go("transactions"), goBatches: this.go("batches"),
+      goTransfers: this.go("transfers"), goSites: this.go("sites"), goPeriods: this.go("periods"),
+      goUsers: this.go("users"), goAudit: this.go("audit"), goNewTx: this.go("newtx"),
+
+      stats: [
+        { label: "Certified sites", value: "3", unit: "1 trader, 2 processing" },
+        { label: "Open periods", value: q2 ? "1" : "1", unit: q2 ? "2025-Q3" : "2025-Q2, closes 30 Jun" },
+        { label: "Active pools", value: "6", unit: "4 biomethane, 2 BioLNG" },
+        { label: "Biomethane balance", value: "12,480.500", unit: "MWh" },
+        { label: "BioLNG balance", value: "3,142.750", unit: "tonnes" }
+      ],
+      openPeriodState: q2 ? "Open" : "Open", openPeriodLabel: q2 ? "2025-Q3 · Jun 2025 to Aug 2025" : "2025-Q2 · Mar 2025 to May 2025",
+      dashChecks: [
+        { color: "#2e7d32", title: "62 inbound bookings, 62 documents", detail: "Rule 3 satisfied for every inbound volume in the period." },
+        { color: t.ok ? "#2e7d32" : "#f9a825", title: t.ok ? "Stock within tolerance" : "Physical stock reading off by " + (t.pct || 0).toFixed(2) + "%", detail: t.ok ? "Booked and measured balances agree within " + t.limit + "%." : "Resolve before closing. Rule 8 blocks the close while the gap holds." },
+        { color: "#2e7d32", title: "No negative pool balance", detail: "Lowest intra-period balance 1,204.100 MWh on 2025-03-27." },
+        { color: "#1976d2", title: "One scheme transfer, EU to PLUS", detail: "480.000 MWh, direction check passed on 2025-05-05." }
+      ],
+      recentRows: txRows.slice(0, 5),
+      txRows: txRows, txCount: filtered.length + " of " + all.length + " transactions",
+      txFilters: [filterBtn("All"), filterBtn("Inbound"), filterBtn("Outbound"), filterBtn("Conversion")],
+
+      formType: s.form.type, formDate: s.form.date, formBatch: s.form.batch, formParty: s.form.party,
+      formGhg: s.form.ghg, formQty: s.form.qty, formCf: s.form.cf,
+      setType: this.set("type"), setDate: this.set("date"), setBatch: this.set("batch"), setParty: this.set("party"),
+      setGhg: this.set("ghg"), setQty: this.set("qty"), setCf: this.set("cf"),
+      qtyError: s.qtyError, qtyBorder: s.qtyError ? "#d32f2f" : "#e5e5e5",
+      docBorder: s.docAttached ? "#e5e5e5" : "#f9a825",
+      docLabel: s.docAttached ? "WB-88214 · weighbridge ticket · 2025-05-14" : "No document linked",
+      docAction: s.docAttached ? "Replace" : "Attach document",
+      toggleDoc: () => this.setState({ docAttached: !s.docAttached }),
+      submitTx: this.submitTx,
+      formQtyPreview: (q === null ? 0 : q).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
+      formBPreview: ((10942.3 + (q || 0)) * (parseFloat(s.form.cf) || 1) - 12.5).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
+      formRules: formRules,
+
+      pools: pools,
+      openConversion: () => this.setState({ modal: "conversion" }),
+
+      transfers: [
+        { date: "2025-05-05", from: "Rotterdam Trading Desk · ISCC EU", to: "KHPB Biomethane Plant · ISCC PLUS", volume: "480.000", ghg: "18.4", state: "Accepted", color: "#2e7d32", bg: bg(0) },
+        { date: "2025-03-19", from: "Rotterdam Trading Desk · ISCC EU", to: "KHPB Biomethane Plant · ISCC PLUS", volume: "1,240.000", ghg: "16.8", state: "Accepted", color: "#2e7d32", bg: bg(1) },
+        { date: "2025-02-27", from: "KHPB Biomethane Plant · ISCC PLUS", to: "Rotterdam Trading Desk · ISCC EU", volume: "600.000", ghg: "—", state: "Rejected, Rule 7", color: "#d32f2f", bg: bg(2) },
+        { date: "2025-01-14", from: "Rotterdam Trading Desk · ISCC EU", to: "Pasir Gudang Liquefaction · ISCC PLUS", volume: "920.000", ghg: "14.2", state: "Accepted", color: "#2e7d32", bg: bg(3) }
+      ],
+
+      sites: [
+        { name: "KHPB Biomethane Plant", location: "Lahad Datu, Sabah, Malaysia", scheme: "ISCC_PLUS", role: "PROCESSING_UNIT", cert: "PLUS-2024-0417", balance: "12,480.500" },
+        { name: "Pasir Gudang Liquefaction", location: "Johor, Malaysia", scheme: "ISCC_PLUS", role: "PROCESSING_UNIT", cert: "PLUS-2024-0512", balance: "3,142.750" },
+        { name: "Rotterdam Trading Desk", location: "Rotterdam, Netherlands", scheme: "ISCC_EU", role: "TRADER", cert: "EU-2023-8891", balance: "2,841.450" }
+      ],
+      periods: periods,
+
+      users: [
+        { name: "A. Rahman", email: "ops.admin@khpb-energy.com", role: "SUPER_ADMIN", canClose: "Yes", closeColor: "#2e7d32", last: "2025-05-14 09:41", bg: bg(0) },
+        { name: "S. Lim", email: "s.lim@khpb-energy.com", role: "COMPANY_ADMIN", canClose: "Yes", closeColor: "#2e7d32", last: "2025-05-12 16:08", bg: bg(1) },
+        { name: "N. Farid", email: "n.farid@khpb-energy.com", role: "COMPANY_USER", canClose: "No", closeColor: "#6b6b6b", last: "2025-05-13 08:20", bg: bg(2) },
+        { name: "T. Yusof", email: "t.yusof@khpb-energy.com", role: "COMPANY_USER", canClose: "No", closeColor: "#6b6b6b", last: "2025-05-09 15:34", bg: bg(3) }
+      ],
+      auditRows: auditRows,
+      auditSeq: pick.seq, auditTitle: pick.title, auditMeta: pick.ts + " · " + pick.actor + " · " + pick.meta,
+      auditBefore: pick.before, auditAfter: pick.after,
+
+      showClose: s.modal === "close", showConversion: s.modal === "conversion", showAudit: s.modal === "audit", showReject: s.modal === "reject",
+      openClose: () => this.setState({ modal: "close" }), closeModal: () => this.setState({ modal: null }),
+      closeReject: () => this.setState({ modal: null, screen: s.screen === "newtx" ? "newtx" : s.screen }),
+      confirmClose: this.confirmClose,
+      stockValue: s.stock, setStock: e => this.setState({ stock: e.target.value }),
+      closeRules: closeRules,
+      toleranceColor: t.ok ? "#2e7d32" : "#d32f2f",
+      toleranceText: t.pct === null ? "Enter a numeric reading." : (t.ok ? "Delta " + t.pct.toFixed(3) + "% · within the " + t.limit + "% tolerance" : "Delta " + t.pct.toFixed(3) + "% · exceeds the " + t.limit + "% tolerance"),
+      rejectRule: s.reject ? s.reject.rule : "", rejectTitle: s.reject ? s.reject.title : "",
+      rejectBody: s.reject ? s.reject.body : "", rejectTrace: s.reject ? s.reject.trace : "",
+      toast: s.toast, toastTitle: s.toastTitle, toastColor: s.toastColor
+    };
+  }
+}
+
+</script>
+</body>
+</html>

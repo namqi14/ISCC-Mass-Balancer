@@ -1,0 +1,158 @@
+<style>
+#erd svg.erDiagram .divider path { stroke-opacity: 0.5; }
+#erd svg.erDiagram .row-rect-odd path,
+#erd svg.erDiagram .row-rect-odd rect,
+#erd svg.erDiagram .row-rect-even path,
+#erd svg.erDiagram .row-rect-even rect { stroke: none !important; }
+</style>
+<div id="erd"></div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"Anthropic Sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '13px',
+    fontFamily: '"Anthropic Sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+  },
+});
+const src = `erDiagram
+  SITES ||--o{ PERIODS : has
+  SITES ||--o{ BATCHES : has
+  SITES ||--o{ PHYSICAL_STOCK_READINGS : has
+  SITES ||--o{ CONVERSION_EVENTS : runs
+  SITES ||--o{ SCHEME_TRANSFERS : sends_as_source
+  SITES ||--o{ SCHEME_TRANSFERS : receives_as_target
+  PERIODS ||--o{ TRANSACTIONS : contains
+  PERIODS ||--o{ PERIOD_BALANCES : closes_into
+  PERIODS ||--o{ CONVERSION_EVENTS : occurs_in
+  PHYSICAL_DOCUMENTS ||--o{ TRANSACTIONS : evidences
+  BATCHES ||--o{ TRANSACTIONS : moves_in
+  BATCHES ||--o{ BATCH_MERGES : as_source
+  BATCHES ||--o{ BATCH_MERGES : as_result
+  BATCHES ||--o{ SCHEME_TRANSFERS : is_transferred
+  CONVERSION_EVENTS ||--o{ CONVERSION_LINES : has
+  TRANSACTIONS ||--o{ CONVERSION_LINES : is_line_of
+
+  SITES {
+    int id PK
+    string name
+    string location_id UK
+    enum cert_scheme
+    enum operator_type "TRADER or PROCESSING_UNIT"
+    bool multi_site_balancing_enabled
+    int default_period_length_months "capped at 3"
+  }
+  PERIODS {
+    int id PK
+    int site_id FK
+    date start_date
+    date end_date "max 3 months from start_date"
+    enum status
+    int previous_period_id FK
+    datetime closed_at
+  }
+  PHYSICAL_DOCUMENTS {
+    int id PK
+    string document_type
+    string document_number UK
+    date document_date
+  }
+  BATCHES {
+    int id PK
+    int site_id FK
+    enum cert_scheme "EU or PLUS"
+    string raw_material "grouping key"
+    string country_of_origin "grouping key"
+    decimal ghg_value "grouping key"
+    enum product_type "grouping key"
+    bool is_merged
+  }
+  BATCH_MERGES {
+    int id PK
+    int result_batch_id FK
+    int source_batch_id FK
+    decimal contributed_volume
+    decimal source_ghg_value
+  }
+  TRANSACTIONS {
+    int id PK
+    int site_id FK
+    int period_id FK
+    int batch_id FK
+    enum transaction_type "IN OUT CONV_IN CONV_OUT"
+    decimal volume
+    date transaction_date
+    int physical_document_id FK
+  }
+  CONVERSION_EVENTS {
+    int id PK
+    int site_id FK "must be PROCESSING_UNIT"
+    int period_id FK
+    decimal conversion_factor_cf
+    date conversion_date
+  }
+  CONVERSION_LINES {
+    int id PK
+    int conversion_event_id FK
+    int transaction_id FK
+    enum role "INPUT or OUTPUT"
+  }
+  SCHEME_TRANSFERS {
+    int id PK
+    int source_site_id FK "cert_scheme must be EU"
+    int target_site_id FK "cert_scheme must be PLUS"
+    int batch_id FK
+    decimal volume
+    date transfer_date
+  }
+  PHYSICAL_STOCK_READINGS {
+    int id PK
+    int site_id FK
+    date reading_date
+    decimal certified_stock_qty
+    decimal fossil_stock_qty
+  }
+  PERIOD_BALANCES {
+    int id PK
+    int period_id FK
+    enum product_type
+    decimal total_available_B
+    decimal outgoing_C
+    decimal closing_balance
+    decimal credits_carried_forward "EU capped by physical stock, PLUS uncapped"
+    decimal ghg_value_assigned
+  }`;
+const { svg } = await mermaid.render('erd-svg', src);
+document.getElementById('erd').innerHTML = svg;
+
+document.querySelectorAll('#erd svg.erDiagram .node').forEach(node => {
+  const firstPath = node.querySelector('path[d]');
+  if (!firstPath) return;
+  const d = firstPath.getAttribute('d');
+  const nums = d.match(/-?[\d.]+/g)?.map(Number);
+  if (!nums || nums.length < 8) return;
+  const xs = [nums[0], nums[2], nums[4], nums[6]];
+  const ys = [nums[1], nums[3], nums[5], nums[7]];
+  const x = Math.min(...xs), y = Math.min(...ys);
+  const w = Math.max(...xs) - x, h = Math.max(...ys) - y;
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('x', x); rect.setAttribute('y', y);
+  rect.setAttribute('width', w); rect.setAttribute('height', h);
+  rect.setAttribute('rx', '8');
+  for (const a of ['fill', 'stroke', 'stroke-width', 'class', 'style']) {
+    if (firstPath.hasAttribute(a)) rect.setAttribute(a, firstPath.getAttribute(a));
+  }
+  firstPath.replaceWith(rect);
+});
+
+document.querySelectorAll('#erd svg.erDiagram .row-rect-odd path, #erd svg.erDiagram .row-rect-even path').forEach(p => {
+  p.setAttribute('stroke', 'none');
+});
+</script>

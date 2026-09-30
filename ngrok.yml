@@ -1,0 +1,14 @@
+version: "2"
+authtoken: 3CGFSD6lgWNEhumCvdHNhm8f5zw_4njW5c3iKmeQSfnTVb9F
+tunnels:
+  # Only run this one -- start it with `ngrok start frontend --config ngrok.yml`
+  # (not `--all`). Vite already proxies /api/* to the backend on :4000
+  # (see frontend/vite.config.ts), so this single tunnel covers both the
+  # app and its API. A free ngrok account only has one static domain; a
+  # second tunnel defined here would race the first one for that same
+  # domain and randomly "win" or "lose" on each request -- confirmed
+  # 2026-08-27, both tunnels were reporting the identical public_url and
+  # which one actually received traffic flipped between requests.
+  frontend:
+    proto: http
+    addr: 5173
