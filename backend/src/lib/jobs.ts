@@ -37,10 +37,10 @@ export async function enqueueJob(tx: Tx, type: string, payload: unknown, runAt?:
 async function claimNextJob(): Promise<{ id: number; type: string; payload: string; attempts: number; maxAttempts: number } | null> {
   const claimed = await prisma.$executeRaw`
     UPDATE jobs
-    SET status = 'PROCESSING', startedAt = NOW(3)
+    SET status = 'PROCESSING', "startedAt" = NOW()
     WHERE id = (
       SELECT id FROM (
-        SELECT id FROM jobs WHERE status = 'PENDING' AND runAt <= NOW(3) ORDER BY id ASC LIMIT 1
+        SELECT id FROM jobs WHERE status = 'PENDING' AND "runAt" <= NOW() ORDER BY id ASC LIMIT 1
       ) AS next_job
     )
     AND status = 'PENDING'

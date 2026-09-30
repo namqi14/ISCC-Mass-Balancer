@@ -36,11 +36,11 @@ export class PrismaRateLimitStore implements Store {
     // within the existing window. All in one statement -- no race window
     // between reading the old count and writing the new one.
     await prisma.$executeRaw`
-      INSERT INTO rate_limit_counters (\`key\`, points, resetAt)
+      INSERT INTO rate_limit_counters ("key", points, "resetAt")
       VALUES (${key}, 1, ${resetAt})
-      ON DUPLICATE KEY UPDATE
-        points = IF(resetAt <= ${now}, 1, points + 1),
-        resetAt = IF(resetAt <= ${now}, ${resetAt}, resetAt)
+      ON CONFLICT ("key") DO UPDATE SET
+        points = CASE WHEN rate_limit_counters."resetAt" <= ${now} THEN 1 ELSE rate_limit_counters.points + 1 END,
+        "resetAt" = CASE WHEN rate_limit_counters."resetAt" <= ${now} THEN ${resetAt} ELSE rate_limit_counters."resetAt" END
     `;
 
     const row = await prisma.rateLimitCounter.findUnique({ where: { key } });

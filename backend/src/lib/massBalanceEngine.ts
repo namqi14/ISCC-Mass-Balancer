@@ -204,7 +204,7 @@ export async function findOrCreateBatch(
 async function lockBatchesForUpdate(tx: Tx, companyId: number, batchIds: number[]): Promise<void> {
   const ids = [...new Set(batchIds)].sort((a, b) => a - b);
   if (ids.length === 0) return;
-  await tx.$queryRaw`SELECT id FROM batches WHERE companyId = ${companyId} AND id IN (${Prisma.join(ids)}) FOR UPDATE`;
+  await tx.$queryRaw`SELECT id FROM batches WHERE "companyId" = ${companyId} AND id IN (${Prisma.join(ids)}) FOR UPDATE`;
 }
 
 /**
