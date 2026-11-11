@@ -2,10 +2,10 @@
  * A polled, DB-backed job queue -- the honest real substitute for a message
  * broker (RabbitMQ/Kafka/SQS) at this project's scale, given this
  * environment has neither Redis nor Docker to run one. This is a
- * legitimate, commonly-used pattern, not a toy: MariaDB 10.4.32 (this
- * project's dev database) predates `SELECT ... FOR UPDATE SKIP LOCKED`
- * (added in MariaDB 10.6), so the worker claims a job with an atomic
- * single-statement UPDATE instead.
+ * legitimate, commonly-used pattern, not a toy. The worker claims a job with
+ * one atomic `UPDATE ... RETURNING` over a `FOR UPDATE SKIP LOCKED` subselect
+ * (Postgres), so two workers can never claim the same row and the claimed
+ * row comes back directly.
  *
  * `enqueueJob` takes a transaction client so it can be called from inside
  * the same `$transaction` as the business action that triggers it (e.g.
@@ -35,23 +35,19 @@ export async function enqueueJob(tx: Tx, type: string, payload: unknown, runAt?:
  * workers happened to poll at the same instant (the second one's UPDATE
  * affects zero rows once the first has already flipped the status). */
 async function claimNextJob(): Promise<{ id: number; type: string; payload: string; attempts: number; maxAttempts: number } | null> {
-  const claimed = await prisma.$executeRaw`
+  const rows = await prisma.$queryRaw<{ id: number; type: string; payload: string; attempts: number; maxAttempts: number }[]>`
     UPDATE jobs
     SET status = 'PROCESSING', "startedAt" = NOW()
     WHERE id = (
-      SELECT id FROM (
-        SELECT id FROM jobs WHERE status = 'PENDING' AND "runAt" <= NOW() ORDER BY id ASC LIMIT 1
-      ) AS next_job
+      SELECT id FROM jobs
+      WHERE status = 'PENDING' AND "runAt" <= NOW()
+      ORDER BY id ASC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
     )
-    AND status = 'PENDING'
+    RETURNING id, type, payload, attempts, "maxAttempts"
   `;
-  if (claimed === 0) return null;
-
-  // We just set exactly one row to PROCESSING; find it (the most recently
-  // started one -- safe since only one claim can be in flight per poll tick
-  // in this single-worker-process design).
-  const job = await prisma.job.findFirst({ where: { status: "PROCESSING" }, orderBy: { startedAt: "desc" } });
-  return job;
+  return rows[0] ?? null;
 }
 
 /** The actual, verifiable side effect for `PERIOD_CLOSED_NOTIFICATION`

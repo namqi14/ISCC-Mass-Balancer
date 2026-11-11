@@ -33,6 +33,16 @@ import {
   PlusToPlusTransferNotAllowedError,
   SchemeTransferDirectionError,
 } from "./errors";
+import {
+  CONVERSION_STAGES,
+  UNIT_WORDS,
+  describeSourceUnits,
+  rateRangeWarning,
+  siteHasStage,
+  siteStages,
+  stageForConversion,
+  unitRuleFor,
+} from "./conversionStages";
 import { encryptField } from "./fieldEncryption";
 import { enqueueJob } from "./jobs";
 
@@ -93,8 +103,8 @@ export async function logAudit(
  *
  * Race-safe: two concurrent calls for the very first delivery of a brand-
  * new pool can both miss the lookup below and both attempt to create it.
- * Rather than a lock (there's no row yet to lock), the `batches.poolKey`
- * generated column + unique index (see its migration) makes the DB itself
+ * Rather than a lock (there's no row yet to lock), the `batches_pool_unique`
+ * partial unique index (see the baseline migration) makes the DB itself
  * the referee -- the loser's `create` fails with a unique-constraint error
  * (P2002), which is caught here and turned into a re-read of the pool the
  * winner just created, so both callers still get back the one true pool.
@@ -108,8 +118,8 @@ export async function findOrCreateBatch(
     rawMaterial: string;
     countryOfOrigin: string;
     ghgValue: Prisma.Decimal.Value;
-    productType: "BIOMETHANE" | "BIOLNG";
-    unit: "M3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH";
+    productType: "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG";
+    unit: "M3" | "NM3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH";
     // Only used to populate a brand-new pool -- see below, these three are
     // deliberately NOT part of the lookup/pooling key (whereClause), so
     // reusing an existing pool never rewrites them from a later delivery.
@@ -119,9 +129,9 @@ export async function findOrCreateBatch(
   }
 ) {
   const ghg = D(params.ghgValue);
-  // Mirrors the batches.poolKey generated column exactly (companyId, siteId,
-  // certScheme, rawMaterial, countryOfOrigin, productType, ghgValue, unit) --
-  // this must never diverge from what that column's unique index enforces,
+  // Mirrors the batches_pool_unique partial index exactly (companyId, siteId,
+  // certScheme, rawMaterial, countryOfOrigin, productType, ghgValue, unit,
+  // for unmerged batches) -- this must never diverge from what that index enforces,
   // or the P2002-catch-and-reread race fix below stops working (the reread
   // would use a different key than the one the DB actually rejected on).
   // ghgValueType/materialCategory/wasteStatus deliberately don't join this
@@ -204,6 +214,10 @@ export async function findOrCreateBatch(
 async function lockBatchesForUpdate(tx: Tx, companyId: number, batchIds: number[]): Promise<void> {
   const ids = [...new Set(batchIds)].sort((a, b) => a - b);
   if (ids.length === 0) return;
+  // Postgres: camelCase columns must be double-quoted or they fold to
+  // lowercase and don't match. (On the earlier MySQL setup the quoted form was
+  // a string literal and silently matched nothing -- do not copy this query to
+  // a MySQL database.)
   await tx.$queryRaw`SELECT id FROM batches WHERE "companyId" = ${companyId} AND id IN (${Prisma.join(ids)}) FOR UPDATE`;
 }
 
@@ -594,17 +608,12 @@ export async function createConversionEvent(
     sourceVolume: Prisma.Decimal.Value;
     conversionFactorCf: Prisma.Decimal.Value;
     conversionDate: Date;
-    targetProductType: "BIOMETHANE" | "BIOLNG";
+    targetProductType: "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG";
     actor: Actor;
   }
 ) {
   const site = await tx.site.findFirst({ where: { id: params.siteId, companyId: params.companyId } });
   if (!site) throw new AppError("Site not found.", 404);
-  if (site.operatorType !== "PROCESSING_UNIT") {
-    throw new ConversionNotAllowedError(
-      `Site "${site.name}" is registered as a TRADER. Only PROCESSING_UNIT sites may run conversions.`
-    );
-  }
 
   const period = await tx.period.findFirst({ where: { id: params.periodId, companyId: params.companyId } });
   if (!period) throw new AppError("Period not found.", 404);
@@ -616,6 +625,41 @@ export async function createConversionEvent(
   if (!sourceBatch) throw new AppError("Source batch not found.", 404);
   if (sourceBatch.productType === params.targetProductType) {
     throw new AppError("Target product type must differ from the source pool's product type.");
+  }
+
+  // Client clarification (2026-10-16): a conversion is exactly one step of
+  // the POME -> Biogas -> Biomethane -> Bio-LNG chain, and the site must have
+  // that stage switched on (Site.canConvertP1/P2/P3). A site may have any
+  // combination of stages; skipping a step in one booking isn't a stage.
+  const stage = stageForConversion(sourceBatch.productType, params.targetProductType);
+  if (!stage) {
+    throw new ConversionNotAllowedError(
+      `${sourceBatch.productType} cannot be converted directly into ${params.targetProductType}. ` +
+        `A conversion is one step of the chain: ` +
+        `${CONVERSION_STAGES.map((s) => s.label).join(", ")}. Book each step as its own conversion.`
+    );
+  }
+  if (!siteHasStage(site, stage.stage)) {
+    const enabled = siteStages(site);
+    throw new ConversionNotAllowedError(
+      `Site "${site.name}" is not set up for ${stage.label}. ` +
+        (enabled.length > 0
+          ? `It is set up for: ${enabled.join(", ")}. `
+          : `It has no conversion stages enabled (it is a trader site). `) +
+        `Enable ${stage.stage} for this site in Site Management first.`
+    );
+  }
+
+  // Units are strict (19 Oct 2026 Developer Clarification): a conversion
+  // rate is only meaningful in the unit it is quoted in (m3 of POME, kg of
+  // Bio-LNG, ...), and the step changes the unit (m3 -> Nm3 -> kg), so the
+  // output pool's unit comes from the stage, not from the input.
+  const unitRule = unitRuleFor(stage, sourceBatch.unit);
+  if (!unitRule) {
+    throw new ConversionNotAllowedError(
+      `${stage.label} converts ${sourceBatch.productType} held in ${describeSourceUnits(stage)}, but this pool is in ` +
+        `${UNIT_WORDS[sourceBatch.unit]}. Book the stock in ${describeSourceUnits(stage)} to convert it.`
+    );
   }
 
   const sourceVolume = D(params.sourceVolume);
@@ -633,6 +677,24 @@ export async function createConversionEvent(
 
   const resultVolume = sourceVolume.times(cf);
 
+  // The rate the site has configured for this stage/unit on the conversion
+  // date (rates are dated; see ConversionRate). Only used to WARN when the
+  // factor is outside the user's own min/max -- never to reject, since a
+  // plant's measured yield can differ from its configured rate.
+  const inForceRate = await tx.conversionRate.findFirst({
+    where: {
+      companyId: params.companyId,
+      siteId: params.siteId,
+      stage: stage.stage,
+      sourceUnit: sourceBatch.unit,
+      effectiveFrom: { lte: params.conversionDate },
+    },
+    orderBy: { effectiveFrom: "desc" },
+  });
+  const warnings: string[] = [];
+  const rangeWarning = rateRangeWarning(stage, Number(cf), inForceRate);
+  if (rangeWarning) warnings.push(rangeWarning);
+
   const targetBatch = await findOrCreateBatch(tx, {
     companyId: params.companyId,
     siteId: params.siteId,
@@ -643,8 +705,10 @@ export async function createConversionEvent(
     productType: params.targetProductType,
     // A conversion's output pool carries the same sustainability
     // documentation as its input -- it's the same certified material, just
-    // converted to a different product type, not a fresh delivery.
-    unit: sourceBatch.unit,
+    // converted to a different product type, not a fresh delivery -- EXCEPT
+    // the unit, which the stage dictates (m3 POME -> Nm3 biogas, Nm3
+    // biomethane -> kg Bio-LNG, ...).
+    unit: unitRule.targetUnit,
     ghgValueType: sourceBatch.ghgValueType,
     materialCategory: sourceBatch.materialCategory,
     wasteStatus: sourceBatch.wasteStatus,
@@ -699,10 +763,13 @@ export async function createConversionEvent(
     entityId: event.id,
     action: "CREATE",
     actor: params.actor,
-    afterValue: `${sourceBatch.productType} ${sourceVolume} -> ${params.targetProductType} ${resultVolume} (CF=${cf})`,
+    afterValue:
+      `${sourceBatch.productType} ${sourceVolume} ${UNIT_WORDS[sourceBatch.unit]} -> ${params.targetProductType} ` +
+      `${resultVolume} ${UNIT_WORDS[unitRule.targetUnit]} (${stage.stage}, CF=${cf})`,
+    notes: warnings.length > 0 ? warnings.join(" ") : null,
   });
 
-  return { event, sourceTransaction: outTx, targetTransaction: inTx, targetBatch, resultVolume };
+  return { event, sourceTransaction: outTx, targetTransaction: inTx, targetBatch, resultVolume, warnings };
 }
 
 // ---------------------------------------------------------------------------
@@ -1022,7 +1089,7 @@ export async function createPlusToPlusTransfer(
 // ---------------------------------------------------------------------------
 
 export interface ClosePeriodProductInput {
-  productType: "BIOMETHANE" | "BIOLNG";
+  productType: "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG";
   openingInputInventoryA: Prisma.Decimal.Value;
   // Optional: required at sites that actually run conversions
   // (operatorType = PROCESSING_UNIT); defaults to 1 at a plain TRADER site
@@ -1044,7 +1111,7 @@ async function sumTransactions(
   tx: Tx,
   companyId: number,
   periodId: number,
-  productType: "BIOMETHANE" | "BIOLNG",
+  productType: "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG",
   types: TransactionType[]
 ): Promise<Prisma.Decimal> {
   const rows = await tx.transaction.findMany({
@@ -1066,7 +1133,7 @@ async function previousCarriedForward(
   tx: Tx,
   companyId: number,
   previousPeriodId: number | null,
-  productType: "BIOMETHANE" | "BIOLNG"
+  productType: "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG"
 ): Promise<Prisma.Decimal> {
   if (!previousPeriodId) return D(0);
   const priorBalance = await tx.periodBalance.findFirst({
@@ -1108,6 +1175,24 @@ export async function closePeriod(
   // Compute every product-type balance first -- if any one of them breaches
   // Rule 5, nothing gets persisted and the whole close is rejected.
   for (const p of params.products) {
+    // The close sums volumes per product type, which is only meaningful if
+    // every transaction of that product is in one unit. The conversion chain
+    // legitimately changes units (m3 -> Nm3 -> kg), so a product can now
+    // appear in several units (e.g. Biomethane booked in both Nm3 and MT) --
+    // refuse to add those together silently.
+    const unitRows = await tx.transaction.findMany({
+      where: { companyId: params.companyId, periodId: period.id, batch: { productType: p.productType } },
+      select: { batch: { select: { unit: true } } },
+    });
+    const unitsInPeriod = [...new Set(unitRows.map((r) => r.batch.unit))];
+    if (unitsInPeriod.length > 1) {
+      throw new AppError(
+        `${p.productType} has transactions in more than one unit in this period (` +
+          `${unitsInPeriod.map((u) => UNIT_WORDS[u as keyof typeof UNIT_WORDS]).join(", ")}). Volumes in different units ` +
+          `cannot be summed into one balance -- re-book the stock in a single unit before closing.`
+      );
+    }
+
     const incomingA = await sumTransactions(tx, params.companyId, period.id, p.productType, IN_TYPES);
     const outgoingC = await sumTransactions(tx, params.companyId, period.id, p.productType, OUT_TYPES);
 

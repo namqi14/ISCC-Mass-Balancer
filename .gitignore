@@ -52,3 +52,7 @@ logs/
 # AI/Agent Local configs (optional to ignore)
 .claude/
 .gemini/
+
+# Local embedded Postgres data (backend/scripts/dev-db.mts)
+.pgdata/
+backend/.pgdata/

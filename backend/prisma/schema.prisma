@@ -28,6 +28,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// PostgreSQL: Supabase in production, embedded Postgres for local dev
+// (`npm run db:dev`, backend/scripts/dev-db.mts). DATABASE_URL is what the app
+// connects with -- on Supabase, the pooled connection (`?pgbouncer=true`);
+// DIRECT_URL is what `prisma migrate` uses (the direct/session connection,
+// since migrations can't go through a transaction-mode pooler). Locally both
+// are the same URL.
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
@@ -57,6 +63,8 @@ enum OperatorType {
 }
 
 enum ProductType {
+  POME
+  BIOGAS
   BIOMETHANE
   BIOLNG
 }
@@ -102,11 +110,23 @@ enum WasteStatus {
 // enum value covers both rather than duplicating it.
 enum Unit {
   M3
+  NM3 // normal cubic metre (0 C, 1 atm) -- the unit the client gives gas conversion rates in
   METRIC_TONS
   KG
   M3_15C
   J
   KWH
+}
+
+// The four conversion steps (client clarification, 2026-10-16 / 2026-10-19):
+// P1 POME -> Biogas, P2 Biogas -> Biomethane, P3 Biomethane -> Bio-LNG,
+// P4 Bio-LNG -> Biomethane (regasification). The units each step takes and
+// produces live in backend/src/lib/conversionStages.ts.
+enum ConversionStage {
+  P1
+  P2
+  P3
+  P4
 }
 
 // Backs the DB-backed job queue (see backend/src/lib/jobs.ts) -- this
@@ -156,6 +176,7 @@ model Company {
   batchMerges           BatchMerge[]
   transactions          Transaction[]
   conversionEvents      ConversionEvent[]
+  conversionRates       ConversionRate[]
   conversionLines       ConversionLine[]
   schemeTransfers       SchemeTransfer[]
   physicalStockReadings PhysicalStockReading[]
@@ -199,7 +220,19 @@ model Site {
   name                      String       @db.VarChar(200)
   locationId                String       @unique @db.VarChar(100)
   certScheme                CertScheme
+  // DERIVED from the three stage flags below (sites.routes.ts writes it):
+  // PROCESSING_UNIT when any stage is on, else TRADER. Kept as a column
+  // because period close and PeriodsPage already read it.
   operatorType              OperatorType @default(TRADER)
+  // Conversion stages this site runs (client clarification, 2026-10-16),
+  // independent of each other -- any combination is valid. See
+  // lib/conversionStages.ts for the chain: P1 = POME -> Biogas,
+  // P2 = Biogas -> Biomethane, P3 = Biomethane -> Bio-LNG. Plain booleans
+  // rather than an enum array (Postgres-only) so this stays portable.
+  canConvertP1              Boolean      @default(false)
+  canConvertP2              Boolean      @default(false)
+  canConvertP3              Boolean      @default(false)
+  canConvertP4              Boolean      @default(false)
   // Rule 1: disabled by default -- must be explicitly opted into before
   // batches/balances may be pooled across more than one site.
   multiSiteBalancingEnabled Boolean      @default(false)
@@ -239,6 +272,7 @@ model Site {
   batches               Batch[]
   transactions          Transaction[]
   conversionEvents      ConversionEvent[]
+  conversionRates       ConversionRate[]
   schemeTransfersOut    SchemeTransfer[]       @relation("SourceSite")
   schemeTransfersIn     SchemeTransfer[]       @relation("TargetSite")
   physicalStockReadings PhysicalStockReading[]
@@ -345,30 +379,26 @@ model Batch {
   // clarification); null otherwise.
   wasteStatus      WasteStatus?
   // Every transaction against this pool must match this unit -- see the
-  // poolKey comment below for why unit had to join the grouping key rather
-  // than live per-transaction.
+  // pool-uniqueness comment below for why unit had to join the grouping key
+  // rather than live per-transaction.
   unit             Unit        @default(M3)
   isMerged        Boolean     @default(false)
   createdAt       DateTime    @default(now())
-  // DB-generated (see the migration SQL, not set by application code): the
-  // grouping key above, concatenated, but ONLY when isMerged = false, else
-  // NULL. MySQL has no partial/conditional unique index, so this generated
-  // column plus a plain unique index on it is the standard workaround --
-  // multiple NULLs don't collide, so merged batches (which can legitimately
-  // share a tuple with an unmerged one, e.g. inheriting a source's raw
-  // material) are entirely unconstrained by this, while two unmerged pools
-  // for the same site/scheme/feedstock/origin/product/GHG/unit value can
-  // never both exist. This is what closes findOrCreateBatch's race: a
-  // second concurrent INBOUND for a brand-new pool now fails with a unique
-  // violation instead of silently creating a duplicate pool, and the
+  // Pool uniqueness is enforced by a PARTIAL UNIQUE INDEX that Prisma can't
+  // model, so it lives only in the baseline migration SQL
+  // (`batches_pool_unique`): UNIQUE (companyId, siteId, certScheme, rawMaterial,
+  // countryOfOrigin, productType, ghgValue, unit) WHERE isMerged = false.
+  // Merged batches (which can legitimately share a tuple with an unmerged one,
+  // e.g. inheriting a source's raw material) are entirely unconstrained, while
+  // two unmerged pools for the same site/scheme/feedstock/origin/product/GHG/
+  // unit can never both exist. This is what closes findOrCreateBatch's race: a
+  // second concurrent INBOUND for a brand-new pool fails with a unique
+  // violation (P2002) instead of silently creating a duplicate pool, and the
   // caller catches that and re-reads the pool the first request created.
-  // `unit` joined this key in the same migration ghgValueType/
-  // materialCategory/wasteStatus/unit were added: a pool's running balance
-  // is a plain sum of its transactions' volumes, which is only valid
-  // arithmetic if every transaction against it shares one unit -- so two
-  // pools that are identical in every other attribute but differ in unit
-  // must never be allowed to collide into one.
-  poolKey String? @unique @db.VarChar(400)
+  // `unit` is part of the key because a pool's balance is a plain sum of its
+  // transactions' volumes, which is only valid arithmetic if every transaction
+  // against it shares one unit. (This replaced MySQL's `poolKey` generated
+  // column when the project moved to Postgres.)
 
   company Company @relation(fields: [companyId], references: [id])
   site    Site    @relation(fields: [siteId], references: [id])
@@ -485,6 +515,38 @@ model ConversionLine {
 
   @@index([companyId])
   @@map("conversion_lines")
+}
+
+// A site's conversion rate for one stage and source unit, as the user
+// maintains it (client clarification, 2026-11-10: the rates change monthly or
+// weekly, so they are NOT fixed in code). Dated: each row applies from
+// effectiveFrom until a later row for the same (site, stage, sourceUnit)
+// takes over, so a conversion pre-fills the rate in force on its own date.
+// History is kept; saving the same (site, stage, sourceUnit, effectiveFrom)
+// again corrects that row rather than adding a duplicate. minFactor/maxFactor
+// are the user's OWN optional tolerance range -- outside it a conversion only
+// gets a warning, never a rejection. Each ConversionEvent still stores the
+// factor it was actually booked with.
+model ConversionRate {
+  id            Int             @id @default(autoincrement())
+  companyId     Int
+  siteId        Int
+  stage         ConversionStage
+  sourceUnit    Unit
+  factor        Decimal         @db.Decimal(12, 6)
+  minFactor     Decimal?        @db.Decimal(12, 6)
+  maxFactor     Decimal?        @db.Decimal(12, 6)
+  effectiveFrom DateTime        @db.Date
+  note          String?         @db.VarChar(300)
+  createdById   Int?
+  createdAt     DateTime        @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+  site    Site    @relation(fields: [siteId], references: [id])
+
+  @@unique([siteId, stage, sourceUnit, effectiveFrom])
+  @@index([companyId])
+  @@map("conversion_rates")
 }
 
 // One-directional ISCC EU -> ISCC PLUS volume transfer between two sites

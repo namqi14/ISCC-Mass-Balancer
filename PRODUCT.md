@@ -100,6 +100,81 @@ confirmations that the existing implementation is already correct.
 
 ## Capabilities and Constraints
 
+- **Conversion stages and rates (2026-10-16, extended 2026-11-10) — Material Conversion
+  is the top-priority module** (Transfers and In/Out depend on it). The conversion chain
+  has four steps: **P1** POME → Biogas, **P2** Biogas → Biomethane, **P3** Biomethane →
+  Bio-LNG, and **P4** Bio-LNG → Biomethane (regasification, a real bookable reverse
+  step). Each site runs any combination (`Site.canConvertP1..P4`, set in Company Profile >
+  Sites); `Site.operatorType` is *derived* from those flags (any stage = `PROCESSING_UNIT`)
+  and is no longer accepted from the client. `createConversionEvent` rejects a conversion
+  that isn't exactly one step of the chain, or whose stage the site doesn't have.
+  **Units are strict and change along the chain** (19 Oct 2026 Developer Clarification):
+  P1 m³ POME → Nm³ biogas; P2 Nm³ → Nm³; P3 Nm³ biomethane → **kg** Bio-LNG; P4 kg or m³
+  Bio-LNG → Nm³. A pool in a unit the stage doesn't take is rejected, and the output
+  pool's unit comes from the stage. `NM3` (normal cubic metre) was added to `Unit`.
+  **The rates are NOT fixed in code**: they change monthly/weekly, so each *site*
+  maintains its own **dated** rates (`ConversionRate`: factor, optional warn-below/above
+  range, `effectiveFrom`; append-only history, same-date save corrects). A conversion
+  pre-fills the rate in force on its own date and only *warns* (never blocks) when the
+  factor is outside that rate's own range. The client document's typical figures (P1
+  25–29, P2 0.55–0.60, P3 0.70–0.72, P4 1.39–1.40 per kg / 590–600 per m³) are a
+  non-binding hint beside the input, never applied. Scope per site is the user's
+  tentative call ("I don't have a confirmation, let's make it per site") — revisit if the
+  client wants company-wide rates. API: `GET /conversions/stages`, `GET/POST
+  /conversions/rates`; admin-only to edit. Code: `backend/src/lib/conversionStages.ts`
+  (mirrored in `frontend/src/lib/constants.ts` — keep in sync). `closePeriod` now rejects
+  a product whose transactions span more than one unit. Existing processing units were
+  backfilled to P1–P3 (not P4) — **narrow each real site to its actual stages**. Existing
+  MT/KWh pools can't use the volumetric rates until re-booked in the stage's unit.
+  Period close still asks for one factor per product, including POME; whether that
+  should map per stage is open. Dashboard still counts only Biomethane.
+- **19 Oct 2026 Developer Clarification — roadmap** (the client's PDF; examples reference
+  PEGT/PETRONAS, a trader with storage sending biomethane to a liquefaction tolling plant).
+  Phase 1, conversions (above), is done. Remaining, in agreed order: **(2) pool
+  identity** — the document's ~18 "keep separate" characteristics (GHG method, PLUS
+  material category, sustainability claim, certified status, scope, chain-of-custody
+  method, reflection/compensation, ...), which *reverses* the earlier decision to keep
+  material category / GHG method out of the pool key; merging actual- with default-GHG
+  pools must no longer be silent. **(3) EU → PLUS**: a confirmation popup (the transfer is
+  irreversible), an eligibility check (ISCC Compliant source), a block-and-record
+  exception — flowchart: atomic debit-EU/credit-PLUS under one transfer ID. **(4) Tolling**
+  with unique tracker numbers linking issued material to its source group. **(5) Client
+  setup**: input/output product registry, activity types (Trader, Trader with Storage,
+  Processing Unit, Tolling Facility — conflicts with the stage-derived `operatorType`),
+  supplier/buyer registry (address, GPS, loading/discharge), certificate address and GHG
+  fields. **(6) Data consolidation dashboard** (period summary, stock grouped by
+  characteristics, click-through to transactions and counterparties). **(7) Physical-stock
+  ledger vs per-scheme credit ledgers**, non-certified stock as physical-only, and
+  conventional LNG as a separate product. Not started.
+- **Database engine: PostgreSQL (decided 2026-11-10) — Supabase in production, embedded
+  Postgres locally.** The user wants a laptop-free, costless *test* deployment on the stack
+  they already used: **Vercel (frontend) + Render (backend) + Supabase (database + file
+  storage)**, so the project moved off MySQL/XAMPP. Local dev: `npm run db:dev` starts a
+  real Postgres (the `embedded-postgres` dev dependency, beta channel; data in
+  `backend/.pgdata`, git-ignored), then `npm run seed` / `npm run dev`. The 14 MySQL
+  migrations are archived in `backend/prisma/_mysql_migrations_archive` (they cannot run
+  on Postgres); `prisma/migrations` now holds one Postgres **baseline**
+  (`20261110180000_postgres_baseline`), generated from the schema plus a hand-written
+  **partial unique index** `batches_pool_unique` (unmerged batches only) that replaces
+  MySQL's `poolKey` generated column — Prisma can't model partial indexes, so it exists only
+  in the migration SQL (`migrate diff` and `migrate dev` both report no drift). The three
+  raw-SQL spots (batch row lock, login rate-limit upsert, job claim — now `UPDATE …
+  RETURNING … FOR UPDATE SKIP LOCKED`) are in Postgres dialect, and emails are lowercased
+  because Postgres compares text case-sensitively. **Verified against a real local
+  Postgres:** the 31-check conversion/rates API test, plus concurrent first-time inbounds
+  → one pool, parallel conversions can't overdraw a pool, login limiter returns 429 after 5
+  attempts, case-insensitive login, and a period-close job is claimed and completed.
+  **Deployment files:** `render.yaml`, `frontend/vercel.json`, `DEPLOY.md` (the steps only
+  the user can do: accounts, secrets), `backend/scripts/setup-storage.ts` (creates the
+  public `logos`/`certificates` buckets), `TRUST_PROXY` support in `index.ts`. **Not verified
+  (needs the user's real accounts):** the actual Render/Vercel/Supabase deploys, the Supabase
+  connection pooler (`?pgbouncer=true&connection_limit=5` is a recommendation, not tested),
+  `TRUST_PROXY=1` on Render, and bucket uploads. Free-tier limits to remember: Render's free
+  service sleeps after ~15 min idle (30–60 s wake, job worker paused meanwhile); Vercel's
+  Hobby plan is non-commercial; Supabase free projects can pause. Storage buckets are
+  **public** (the code serves files by public URL), so uploaded certificates are not
+  confidential. `SEED_PASSWORD` must be set when seeding anything public — the default demo
+  password is well known. Work is uncommitted in git.
 - **Handover objective (confirmed with the client, 2026-08-25): the project ships to the
   client as a blank slate.** Structural setup (companies, sites with their real ISCC
   certificate data, and user accounts) stays as real, correctly-configured data the
@@ -178,7 +253,7 @@ confirmations that the existing implementation is already correct.
   text), no IoT/sensor ingestion of physical stock readings (manual entry only), and no
   integration with an external certification-body system — all explicitly out of scope
   for this phase per the project proposal.
-- Runs on XAMPP MySQL locally today; no production hosting decided yet.
+- Local dev on embedded Postgres; test hosting planned as Vercel + Render + Supabase (see the database bullet above). XAMPP MySQL is no longer used.
 - **Backend hardening (2026-08-22)**, all verified end-to-end against the real running
   API, not just typechecked: rate limiting (general in-memory + DB-backed login
   limiter), idempotency keys (6 mutating endpoints), application-level field encryption

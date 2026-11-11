@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api, apiErrorMessage, resolveAssetUrl } from "../api/client";
-import type { Company, Site } from "../api/types";
+import type { Company, ConversionRate, Site, StageInfo, StageUnitRule } from "../api/types";
+import { useAuth } from "../context/AuthContext";
 import { Badge, Loading, PageHeader } from "../components/Ui";
-import { COUNTRIES } from "../lib/constants";
+import { COUNTRIES, CONVERSION_STAGES, UNIT_LABELS, enabledStages } from "../lib/constants";
 import { fmtDate } from "../lib/format";
 
 /**
@@ -210,12 +211,196 @@ function AccountStatusCard({ company, siteCount }: { company: Company; siteCount
   );
 }
 
+/**
+ * One stage + source unit's rate: the rate in force today, the client's
+ * typical range as a non-binding hint, the dated history, and (admins only)
+ * a form to add a new dated rate. Rates change monthly/weekly, so they are
+ * settings the user maintains -- see backend ConversionRate. Not a <form>:
+ * this panel sits next to the site form and must not nest inside it.
+ */
+function RateBlock({
+  site,
+  stage,
+  rule,
+  rows,
+  canEdit,
+  onSaved,
+}: {
+  site: Site;
+  stage: StageInfo;
+  rule: StageUnitRule;
+  rows: ConversionRate[];
+  canEdit: boolean;
+  onSaved: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [factor, setFactor] = useState("");
+  const [minFactor, setMinFactor] = useState("");
+  const [maxFactor, setMaxFactor] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState(today);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  // rows arrive newest-first; the rate in force today is the newest one dated on/before today.
+  const inForce = rows.find((r) => r.effectiveFrom.slice(0, 10) <= today);
+
+  async function save() {
+    setError("");
+    setBusy(true);
+    try {
+      await api.post("/conversions/rates", {
+        siteId: site.id,
+        stage: stage.stage,
+        sourceUnit: rule.sourceUnit,
+        factor: Number(factor),
+        minFactor: minFactor ? Number(minFactor) : undefined,
+        maxFactor: maxFactor ? Number(maxFactor) : undefined,
+        effectiveFrom,
+      });
+      setFactor("");
+      setMinFactor("");
+      setMaxFactor("");
+      onSaved();
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div className="section-title">
+        {stage.label} — {rule.perUnitText} ({UNIT_LABELS[rule.sourceUnit]} → {UNIT_LABELS[rule.targetUnit]})
+      </div>
+      <div className="hint" style={{ marginBottom: 8 }}>
+        Typical (client guidance, not applied automatically): {rule.typical.min}–{rule.typical.max}. {rule.typical.basis}
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        {inForce ? (
+          <>
+            Rate in force: <strong>{Number(inForce.factor)}</strong>
+            {(inForce.minFactor || inForce.maxFactor) && (
+              <span className="text-[var(--text-dim)]">
+                {" "}
+                (range {inForce.minFactor ? Number(inForce.minFactor) : "—"} to {inForce.maxFactor ? Number(inForce.maxFactor) : "—"})
+              </span>
+            )}
+            <span className="text-[var(--text-dim)]"> since {fmtDate(inForce.effectiveFrom)}</span>
+          </>
+        ) : (
+          <span className="text-[var(--text-dim)]">No rate set yet — conversions will ask for the factor each time.</span>
+        )}
+      </div>
+
+      {canEdit && (
+        <div className="form-grid">
+          <div className="field">
+            <label>New rate</label>
+            <input type="number" step="any" min="0" value={factor} onChange={(e) => setFactor(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Warn below (optional)</label>
+            <input type="number" step="any" min="0" value={minFactor} onChange={(e) => setMinFactor(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Warn above (optional)</label>
+            <input type="number" step="any" min="0" value={maxFactor} onChange={(e) => setMaxFactor(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Effective from</label>
+            <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+          </div>
+          <div className="field" style={{ alignSelf: "end" }}>
+            <button type="button" className="btn small" disabled={busy || !factor || !effectiveFrom} onClick={save}>
+              {busy ? "Saving…" : "Save rate"}
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <div className="error-msg">{error}</div>}
+
+      {rows.length > 0 && (
+        <details style={{ marginTop: 8 }}>
+          <summary className="hint" style={{ cursor: "pointer" }}>
+            History ({rows.length})
+          </summary>
+          <table className="data-table" style={{ marginTop: 6 }}>
+            <thead>
+              <tr>
+                <th>Effective from</th>
+                <th className="num">Rate</th>
+                <th className="num">Warn below</th>
+                <th className="num">Warn above</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{fmtDate(r.effectiveFrom)}</td>
+                  <td className="num">{Number(r.factor)}</td>
+                  <td className="num">{r.minFactor ? Number(r.minFactor) : "—"}</td>
+                  <td className="num">{r.maxFactor ? Number(r.maxFactor) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** Conversion rates for a saved site, one block per enabled stage and source unit. */
+function ConversionRatesPanel({ site }: { site: Site }) {
+  const { isCompanyAdmin } = useAuth();
+  const [stages, setStages] = useState<StageInfo[]>([]);
+  const [rates, setRates] = useState<ConversionRate[]>([]);
+
+  function load() {
+    api.get<StageInfo[]>("/conversions/stages").then((r) => setStages(r.data));
+    api.get<ConversionRate[]>("/conversions/rates", { params: { siteId: site.id, history: 1 } }).then((r) => setRates(r.data));
+  }
+  useEffect(load, [site.id]);
+
+  const siteStages = enabledStages(site);
+  if (siteStages.length === 0) return null;
+
+  return (
+    <div className="panel">
+      <h2>Conversion rates · {site.name}</h2>
+      <div className="panel-sub">
+        Rates change over time: each new rate applies from its effective date, and a conversion pre-fills the rate in force on
+        its own date. Only stages already saved on the site are listed here.
+      </div>
+      {siteStages.map((st) => {
+        const info = stages.find((x) => x.stage === st.stage);
+        if (!info) return null;
+        return info.unitRules.map((rule) => (
+          <RateBlock
+            key={st.stage + "-" + rule.sourceUnit}
+            site={site}
+            stage={info}
+            rule={rule}
+            rows={rates.filter((r) => r.stage === st.stage && r.sourceUnit === rule.sourceUnit)}
+            canEdit={isCompanyAdmin}
+            onSaved={load}
+          />
+        ));
+      })}
+    </div>
+  );
+}
+
 const emptySiteForm = {
   name: "",
   locationId: "",
   country: "Malaysia",
   certScheme: "ISCC_EU" as "ISCC_EU" | "ISCC_PLUS",
-  operatorType: "TRADER" as "TRADER" | "PROCESSING_UNIT",
+  canConvertP1: false,
+  canConvertP2: false,
+  canConvertP3: false,
+  canConvertP4: false,
   multiSiteBalancingEnabled: false,
   certificateNumber: "",
   certifyingBody: "",
@@ -258,7 +443,10 @@ function SitesSection({ sites, onChanged }: { sites: Site[] | null; onChanged: (
       locationId: site.locationId,
       country: site.country,
       certScheme: site.certScheme,
-      operatorType: site.operatorType,
+      canConvertP1: site.canConvertP1,
+      canConvertP2: site.canConvertP2,
+      canConvertP3: site.canConvertP3,
+      canConvertP4: site.canConvertP4,
       multiSiteBalancingEnabled: site.multiSiteBalancingEnabled,
       certificateNumber: site.certificateNumber ?? "",
       certifyingBody: site.certifyingBody ?? "",
@@ -287,7 +475,10 @@ function SitesSection({ sites, onChanged }: { sites: Site[] | null; onChanged: (
         locationId: form.locationId,
         country: form.country,
         certScheme: form.certScheme,
-        operatorType: form.operatorType,
+        canConvertP1: form.canConvertP1,
+        canConvertP2: form.canConvertP2,
+        canConvertP3: form.canConvertP3,
+        canConvertP4: form.canConvertP4,
         multiSiteBalancingEnabled: form.multiSiteBalancingEnabled,
         certificateNumber: form.certificateNumber || undefined,
         certifyingBody: form.certifyingBody || undefined,
@@ -352,7 +543,7 @@ function SitesSection({ sites, onChanged }: { sites: Site[] | null; onChanged: (
     <div>
       <PageHeader
         title="Sites & certificates"
-        subtitle="Each site carries its own certification scheme, operator type, multi-site balancing flag (Rule 1), and ISCC certificate."
+        subtitle="Each site carries its own certification scheme, conversion stages, multi-site balancing flag (Rule 1), and ISCC certificate."
         action={
           <button className="btn" onClick={() => (showForm ? closeForm() : startCreate())}>
             {showForm ? "Cancel" : "+ New site"}
@@ -363,7 +554,7 @@ function SitesSection({ sites, onChanged }: { sites: Site[] | null; onChanged: (
       {showForm && (
         <form className="panel" onSubmit={handleSubmit}>
           <h2>{editingSiteId ? "Edit site" : "New site"}</h2>
-          <div className="panel-sub">A TRADER site can only book inbound/outbound. A PROCESSING_UNIT may also run conversions.</div>
+          <div className="panel-sub">A site with no conversion stage ticked only books inbound/outbound. Tick the stages this site actually runs.</div>
           <div className="form-grid">
             <div className="field span2">
               <label>Site name</label>
@@ -394,12 +585,20 @@ function SitesSection({ sites, onChanged }: { sites: Site[] | null; onChanged: (
                 <option value="ISCC_PLUS">ISCC PLUS</option>
               </select>
             </div>
-            <div className="field">
-              <label>Operator type</label>
-              <select value={form.operatorType} onChange={(e) => setForm({ ...form, operatorType: e.target.value as any })}>
-                <option value="TRADER">Trader</option>
-                <option value="PROCESSING_UNIT">Processing Unit</option>
-              </select>
+            <div className="field span2">
+              <label>Conversion stages</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px" }}>
+                {CONVERSION_STAGES.map((s) => (
+                  <label key={s.stage} className="checkbox-row" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={form[s.flag]}
+                      onChange={(e) => setForm({ ...form, [s.flag]: e.target.checked })}
+                    />
+                    {s.label}
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="field">
               <label>Multi-site balancing</label>
@@ -472,6 +671,10 @@ function SitesSection({ sites, onChanged }: { sites: Site[] | null; onChanged: (
         </form>
       )}
 
+      {showForm && editingSiteId !== null && sites?.find((s) => s.id === editingSiteId) && (
+        <ConversionRatesPanel site={sites.find((s) => s.id === editingSiteId)!} />
+      )}
+
       {!sites ? (
         <Loading />
       ) : sites.length === 0 ? (
@@ -491,7 +694,7 @@ function SitesSection({ sites, onChanged }: { sites: Site[] | null; onChanged: (
                   <th>Location ID</th>
                   <th>Country</th>
                   <th>Scheme</th>
-                  <th>Operator type</th>
+                  <th>Conversion stages</th>
                   <th>Multi-site</th>
                   <th>Certificate</th>
                   <th></th>
@@ -508,7 +711,17 @@ function SitesSection({ sites, onChanged }: { sites: Site[] | null; onChanged: (
                       <td>
                         <Badge tone={s.certScheme === "ISCC_EU" ? "blue" : "ok"}>{s.certScheme.replace("ISCC_", "")}</Badge>
                       </td>
-                      <td>{s.operatorType === "PROCESSING_UNIT" ? "Processing Unit" : "Trader"}</td>
+                      <td>
+                        {enabledStages(s).length === 0 ? (
+                          <span className="text-[var(--text-faint)]">None (trader)</span>
+                        ) : (
+                          <span style={{ display: "inline-flex", gap: 4 }}>
+                            {enabledStages(s).map((st) => (
+                              <Badge key={st.stage} tone="blue">{st.stage}</Badge>
+                            ))}
+                          </span>
+                        )}
+                      </td>
                       <td>{s.multiSiteBalancingEnabled ? <Badge tone="ok">Enabled</Badge> : <Badge tone="neutral">Disabled</Badge>}</td>
                       <td>
                         <Badge tone={cert.tone}>{cert.label}</Badge>

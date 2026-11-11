@@ -3,7 +3,8 @@ import multer from "multer";
 import { supabase } from "../lib/supabase";
 import pdfParse from "pdf-parse";
 import { z } from "zod";
-import { UserRole, CertScheme, OperatorType } from "@prisma/client";
+import { UserRole, CertScheme } from "@prisma/client";
+import { derivedOperatorType } from "../lib/conversionStages";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { asyncHandler } from "../middleware/errorHandler";
@@ -42,7 +43,13 @@ const createSiteSchema = z.object({
   name: z.string().min(1),
   locationId: z.string().min(1),
   certScheme: z.nativeEnum(CertScheme),
-  operatorType: z.nativeEnum(OperatorType).default(OperatorType.TRADER),
+  // Conversion stages this site runs (client clarification, 2026-10-16; see
+  // lib/conversionStages.ts). operatorType is no longer accepted from the
+  // client -- it's derived from these, so the two can never disagree.
+  canConvertP1: z.boolean().default(false),
+  canConvertP2: z.boolean().default(false),
+  canConvertP3: z.boolean().default(false),
+  canConvertP4: z.boolean().default(false),
   multiSiteBalancingEnabled: z.boolean().default(false),
   defaultPeriodLengthMonths: z.number().int().min(1).max(3).default(3),
   // Needed for the PLUS-to-PLUS scheme transfer's same/neighboring-country
@@ -94,7 +101,9 @@ sitesRouter.post(
     }
 
     const data = createSiteSchema.parse(req.body);
-    const site = await prisma.site.create({ data: { ...data, companyId: req.user!.companyId } });
+    const site = await prisma.site.create({
+      data: { ...data, operatorType: derivedOperatorType(data), companyId: req.user!.companyId },
+    });
     await logAudit(prisma, {
       companyId: req.user!.companyId,
       entityType: "Site",
@@ -265,7 +274,22 @@ sitesRouter.patch(
     if (!existing) throw new AppError("Site not found.", 404);
     assertSiteAccessible(await getAccessibleSiteIds(req.user!.userId), id);
     const data = updateSiteSchema.parse(req.body);
-    const site = await prisma.site.update({ where: { id }, data });
+    // Re-derive operatorType from the stage flags as they'll be AFTER this
+    // update (a partial update may only touch one of them).
+    const stagesTouched =
+      data.canConvertP1 !== undefined ||
+      data.canConvertP2 !== undefined ||
+      data.canConvertP3 !== undefined ||
+      data.canConvertP4 !== undefined;
+    const operatorType = stagesTouched
+      ? derivedOperatorType({
+          canConvertP1: data.canConvertP1 ?? existing.canConvertP1,
+          canConvertP2: data.canConvertP2 ?? existing.canConvertP2,
+          canConvertP3: data.canConvertP3 ?? existing.canConvertP3,
+          canConvertP4: data.canConvertP4 ?? existing.canConvertP4,
+        })
+      : undefined;
+    const site = await prisma.site.update({ where: { id }, data: { ...data, operatorType } });
     await logAudit(prisma, {
       companyId: req.user!.companyId,
       entityType: "Site",

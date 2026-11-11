@@ -4,6 +4,7 @@ import type { Batch, ConversionTrace, Site } from "../api/types";
 import { useAuth } from "../context/AuthContext";
 import { Badge, Loading, EmptyState, PageHeader } from "../components/Ui";
 import { fmt, fmtDate, isNegative } from "../lib/format";
+import { UNIT_LABELS } from "../lib/constants";
 
 /**
  * Drill-down levels for browsing pools, in order -- matches the 5 attributes
@@ -86,7 +87,7 @@ function PoolCard({
         </div>
         <div className="metric">
           <span className="l">Type & Unit</span>
-          <span className="v">{b.ghgValueType} &middot; {b.unit}</span>
+          <span className="v">{b.ghgValueType} &middot; {UNIT_LABELS[b.unit]}</span>
         </div>
         <div className="metric">
           <span className="l">Category</span>

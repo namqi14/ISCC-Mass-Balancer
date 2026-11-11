@@ -65,7 +65,8 @@ oauthRouter.get(
     });
 
     const claims = tokens.claims();
-    const email = typeof claims?.email === "string" ? claims.email : undefined;
+    // Lowercased to match how emails are stored (see auth.routes.ts).
+    const email = typeof claims?.email === "string" ? claims.email.trim().toLowerCase() : undefined;
     if (!email) {
       throw new AppError("The identity provider did not return a verified email address.", 400, "OAUTH_NO_EMAIL");
     }

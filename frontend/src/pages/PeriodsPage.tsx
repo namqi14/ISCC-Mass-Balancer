@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
-import type { Period, Site } from "../api/types";
+import type { Period, ProductType, Site } from "../api/types";
 import { useAuth } from "../context/AuthContext";
 import { Badge, Loading, AlertList, PageHeader } from "../components/Ui";
 import { fmt, fmtDate } from "../lib/format";
+import { PRODUCT_LABELS, productsForSite } from "../lib/constants";
 
 interface ProductInput {
-  productType: "BIOMETHANE" | "BIOLNG";
+  productType: ProductType;
   openingInputInventoryA: string;
   conversionFactorCf: string;
   openingOutputInventoryB: string;
   ghgValueAssigned: string;
 }
 
-const emptyProduct = (productType: "BIOMETHANE" | "BIOLNG"): ProductInput => ({
+const emptyProduct = (productType: ProductType): ProductInput => ({
   productType,
   openingInputInventoryA: "0",
   conversionFactorCf: "1",
@@ -66,7 +67,7 @@ export function PeriodsPage() {
     const period = periods?.find(p => p.id === periodId);
     const prevPeriod = periods?.find(p => p.id === period?.previousPeriodId);
 
-    const makeProduct = (productType: "BIOMETHANE" | "BIOLNG"): ProductInput => {
+    const makeProduct = (productType: ProductType): ProductInput => {
       let bVal = "0";
       if (prevPeriod && prevPeriod.balances) {
         const prevBalance = prevPeriod.balances.find(b => b.productType === productType);
@@ -86,7 +87,12 @@ export function PeriodsPage() {
     setClosingPeriodId(periodId);
     setCloseError("");
     setCloseResult(null);
-    setProducts([makeProduct("BIOMETHANE"), makeProduct("BIOLNG")]);
+    // One close row per product that actually appears at this site: every
+    // source/target of its enabled conversion stages (a site with no stages
+    // keeps Biomethane + Bio-LNG, as before).
+    const periodSite = sites.find((s) => s.id === period?.siteId);
+    const closeProducts: ProductType[] = periodSite ? productsForSite(periodSite) : ["BIOMETHANE", "BIOLNG"];
+    setProducts(closeProducts.map(makeProduct));
   }
 
   function updateProduct(idx: number, field: keyof ProductInput, value: string) {
@@ -235,7 +241,7 @@ export function PeriodsPage() {
                 </div>
                 {products.map((prod, idx) => (
                   <div key={prod.productType} style={{ marginBottom: 14 }}>
-                    <div className="section-title">{prod.productType}</div>
+                    <div className="section-title">{PRODUCT_LABELS[prod.productType]}</div>
                     <div className="form-grid">
                       <div className="field">
                         <label>Opening input inventory (a)</label>

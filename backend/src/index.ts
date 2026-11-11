@@ -45,6 +45,19 @@ const CLUSTER_ENABLED = process.env.CLUSTER_ENABLED === "true";
 function startServer() {
   const app = express();
 
+  // Behind a reverse proxy (Render, or any host that terminates TLS in front
+  // of this process) every request arrives from the PROXY's address, with the
+  // real client in X-Forwarded-For. Without this, the rate limiters would
+  // count every user as one client (and express-rate-limit raises a
+  // validation error). Set TRUST_PROXY to the number of proxy hops in front of
+  // the app (Render: 1). Left UNSET by default on purpose: trusting
+  // X-Forwarded-For when the app is directly exposed lets a caller spoof its
+  // IP and walk around the login limiter.
+  const trustProxy = process.env.TRUST_PROXY;
+  if (trustProxy) {
+    app.set("trust proxy", /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === "true" ? true : trustProxy);
+  }
+
   app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173" }));
   app.use(express.json());
 

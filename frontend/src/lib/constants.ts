@@ -1,3 +1,5 @@
+import type { ProductType, Site, Unit } from "../api/types";
+
 // The official ISCC EU raw-material list, taken verbatim (including its own
 // capitalization/spacing) from the "RawMat" dropdown sheet of
 // References/Appendix 12a - ISCC EU Sustainability Declaration (v4.0_21 May 2025).xlsx
@@ -155,3 +157,66 @@ export const PLUS_MATERIAL_CATEGORIES = [
   "Circular",
   "Renewable energy-derived"
 ];
+
+// ---------------------------------------------------------------------------
+// Conversion stages (client clarification, 2026-10-16). Mirrors the backend's
+// lib/conversionStages.ts -- keep the two in sync. A conversion is exactly one
+// step of the POME -> Biogas -> Biomethane -> Bio-LNG chain, and a site runs
+// whichever of the three stages are switched on for it, in any combination.
+// ---------------------------------------------------------------------------
+
+export const PRODUCT_LABELS: Record<ProductType, string> = {
+  POME: "POME",
+  BIOGAS: "Biogas",
+  BIOMETHANE: "Biomethane",
+  BIOLNG: "Bio-LNG",
+};
+
+export type ConversionStage = "P1" | "P2" | "P3" | "P4";
+type StageFlag = "canConvertP1" | "canConvertP2" | "canConvertP3" | "canConvertP4";
+
+export const CONVERSION_STAGES: {
+  stage: ConversionStage;
+  flag: StageFlag;
+  source: ProductType;
+  target: ProductType;
+  label: string;
+}[] = [
+  { stage: "P1", flag: "canConvertP1", source: "POME", target: "BIOGAS", label: "P1 · POME to Biogas" },
+  { stage: "P2", flag: "canConvertP2", source: "BIOGAS", target: "BIOMETHANE", label: "P2 · Biogas to Biomethane" },
+  { stage: "P3", flag: "canConvertP3", source: "BIOMETHANE", target: "BIOLNG", label: "P3 · Biomethane to Bio-LNG" },
+  // Regasification: a reverse step (19 Oct 2026 Developer Clarification).
+  { stage: "P4", flag: "canConvertP4", source: "BIOLNG", target: "BIOMETHANE", label: "P4 · Bio-LNG to Biomethane" },
+];
+
+/** The stages switched on for a site. */
+export function enabledStages(site: Pick<Site, StageFlag>) {
+  return CONVERSION_STAGES.filter((s) => site[s.flag]);
+}
+
+/**
+ * The product types that actually appear at a site, in chain order: every
+ * source and target of its enabled stages. A site with no stages (a trader)
+ * keeps the original two, Biomethane and Bio-LNG.
+ */
+export function productsForSite(site: Pick<Site, StageFlag>): ProductType[] {
+  const stages = enabledStages(site);
+  if (stages.length === 0) return ["BIOMETHANE", "BIOLNG"];
+  const present = new Set<ProductType>();
+  for (const s of stages) {
+    present.add(s.source);
+    present.add(s.target);
+  }
+  return (["POME", "BIOGAS", "BIOMETHANE", "BIOLNG"] as ProductType[]).filter((p) => present.has(p));
+}
+
+/** Display labels for units. NM3 is a normal cubic metre (0 C, 1 atm). */
+export const UNIT_LABELS: Record<Unit, string> = {
+  M3: "m³",
+  NM3: "Nm³",
+  METRIC_TONS: "MT",
+  KG: "kg",
+  M3_15C: "m³ (15°C)",
+  J: "J",
+  KWH: "kWh",
+};

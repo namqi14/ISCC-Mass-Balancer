@@ -10,10 +10,10 @@
  * concern here -- it's that N cluster workers must all agree on one
  * attempt count for a given IP+email, which only a shared store can do.
  *
- * The increment is one atomic `INSERT ... ON DUPLICATE KEY UPDATE`
+ * The increment is one atomic `INSERT ... ON CONFLICT ... DO UPDATE`
  * statement, not a read-then-write -- a plain check-then-act here would
  * reintroduce the exact class of race this project already spent real
- * effort eliminating elsewhere (see `lockBatchesForUpdate`/`poolKey`).
+ * effort eliminating elsewhere (see `lockBatchesForUpdate` and the `batches_pool_unique` index).
  */
 
 import type { Store, ClientRateLimitInfo } from "express-rate-limit";
@@ -35,6 +35,8 @@ export class PrismaRateLimitStore implements Store {
     // has expired, reset to 1 with a new window. Otherwise, bump the count
     // within the existing window. All in one statement -- no race window
     // between reading the old count and writing the new one.
+    // Postgres upsert. In ON CONFLICT ... DO UPDATE both SET expressions read
+    // the row's OLD values, so the two CASEs stay consistent with each other.
     await prisma.$executeRaw`
       INSERT INTO rate_limit_counters ("key", points, "resetAt")
       VALUES (${key}, 1, ${resetAt})

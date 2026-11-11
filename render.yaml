@@ -1,0 +1,41 @@
+# Render Blueprint for the backend API (free web service).
+# The frontend deploys separately on Vercel (see frontend/vercel.json) and the
+# database + file storage live on Supabase. Step-by-step: DEPLOY.md.
+#
+# Free-tier reality: the service sleeps after ~15 min idle and takes 30-60 s to
+# wake, and the in-process job worker does not run while it sleeps.
+services:
+  - type: web
+    name: iscc-mass-balancer-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    # --include=dev: Render builds in production mode, which would otherwise
+    # skip typescript and prisma (both devDependencies) that the build needs.
+    # `prisma migrate deploy` applies pending migrations to Supabase on each
+    # deploy (it reads DIRECT_URL).
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: JWT_EXPIRES_IN
+        value: 12h
+      - key: JWT_SECRET
+        generateValue: true
+      # Secrets and per-environment values you enter in the Render dashboard:
+      - key: DATABASE_URL # Supabase POOLED connection string (see DEPLOY.md)
+        sync: false
+      - key: DIRECT_URL # Supabase session/direct connection string, used by migrations
+        sync: false
+      - key: FIELD_ENCRYPTION_KEY # base64, exactly 32 bytes. Back it up: losing it makes encrypted fields unreadable.
+        sync: false
+      - key: CORS_ORIGIN # your Vercel URL, e.g. https://your-app.vercel.app (no trailing slash)
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY # the service_role key (server-side only)
+        sync: false

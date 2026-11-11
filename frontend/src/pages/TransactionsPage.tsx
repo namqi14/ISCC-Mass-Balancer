@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
-import type { Batch, Period, Site } from "../api/types";
+import type { Batch, Period, ProductType, Site, Unit } from "../api/types";
 import { fmt } from "../lib/format";
 import { PageHeader } from "../components/Ui";
 
@@ -20,7 +20,7 @@ export function TransactionsPage() {
   const [counterpartyCertNumber, setCounterpartyCertNumber] = useState("");
 
   // inbound-only
-  const [productType, setProductType] = useState<"BIOMETHANE" | "BIOLNG">("BIOMETHANE");
+  const [productType, setProductType] = useState<ProductType>("BIOMETHANE");
   const [certScheme, setCertScheme] = useState<"ISCC_EU" | "ISCC_PLUS">("ISCC_EU");
   const [rawMaterial, setRawMaterial] = useState(FEEDSTOCKS[0]);
   const [countryOfOrigin, setCountryOfOrigin] = useState("");
@@ -28,7 +28,7 @@ export function TransactionsPage() {
   const [ghgValueType, setGhgValueType] = useState<"DDV" | "DV" | "AV">("AV");
   const [materialCategory, setMaterialCategory] = useState(EU_MATERIAL_CATEGORIES[0]);
   const [wasteStatus, setWasteStatus] = useState<"PRE_CONSUMER" | "POST_CONSUMER" | "MIXED" | "UNSPECIFIED" | "">("");
-  const [unit, setUnit] = useState<"M3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH">("M3");
+  const [unit, setUnit] = useState<Unit>("M3");
   const [docType, setDocType] = useState<"WEIGHBRIDGE_TICKET" | "DELIVERY_NOTE">("WEIGHBRIDGE_TICKET");
   const [docNumber, setDocNumber] = useState("");
   const [docDate, setDocDate] = useState("");
@@ -267,6 +267,7 @@ export function TransactionsPage() {
                       <input type="number" step="any" min="0" value={volume} onChange={(e) => setVolume(e.target.value)} style={{flex: 2}} required />
                       <select value={unit} onChange={(e) => setUnit(e.target.value as any)} style={{flex: 1}}>
                         <option value="M3">m³</option>
+                        <option value="NM3">Nm³</option>
                         <option value="METRIC_TONS">MT</option>
                         <option value="KG">kg</option>
                         <option value="M3_15C">m³ (15°C)</option>
@@ -291,6 +292,8 @@ export function TransactionsPage() {
                     <label>Product & Scheme</label>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <select value={productType} onChange={(e) => setProductType(e.target.value as any)} style={{flex: 1}}>
+                        <option value="POME">POME</option>
+                        <option value="BIOGAS">Biogas</option>
                         <option value="BIOMETHANE">Biomethane</option>
                         <option value="BIOLNG">Bio-LNG</option>
                       </select>

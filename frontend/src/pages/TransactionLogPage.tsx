@@ -120,6 +120,8 @@ export function TransactionLogPage() {
 
               <select className="log-filter-item select" value={filterProduct} onChange={(e) => setFilterProduct(e.target.value)}>
                 <option value="All">Product: All</option>
+                <option value="POME">POME</option>
+                <option value="BIOGAS">Biogas</option>
                 <option value="BIOMETHANE">Biomethane</option>
                 <option value="BIOLNG">Bio-LNG</option>
               </select>

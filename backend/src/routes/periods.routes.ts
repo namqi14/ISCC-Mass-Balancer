@@ -76,7 +76,7 @@ const closePeriodSchema = z.object({
   products: z
     .array(
       z.object({
-        productType: z.enum(["BIOMETHANE", "BIOLNG"]),
+        productType: z.enum(["POME", "BIOGAS", "BIOMETHANE", "BIOLNG"]),
         openingInputInventoryA: z.coerce.number(),
         // Both optional: closePeriod defaults conversionFactorCf to 1 at a
         // TRADER site, and openingOutputInventoryB from the previous

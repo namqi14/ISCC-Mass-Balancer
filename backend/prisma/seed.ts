@@ -46,7 +46,14 @@ async function main() {
   const als = await findOrCreateCompany("ALS Solutions");
   const khpb = await findOrCreateCompany("Kian Hoe Plantations Berhad");
 
-  const password = "ChangeMe123!";
+  // The demo password is well known -- fine on a local machine, NOT on a
+  // publicly reachable deployment. Set SEED_PASSWORD when seeding anything
+  // that is exposed to the internet (see DEPLOY.md).
+  const password = process.env.SEED_PASSWORD || "ChangeMe123!";
+  if (!process.env.SEED_PASSWORD) {
+    // eslint-disable-next-line no-console
+    console.warn("SEED_PASSWORD not set: using the well-known demo password. Do not do this on a public deployment.");
+  }
   const passwordHash = await bcrypt.hash(password, 10);
 
   const users = [

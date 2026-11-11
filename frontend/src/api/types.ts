@@ -1,7 +1,9 @@
 export type UserRole = "SUPER_ADMIN" | "COMPANY_ADMIN" | "COMPANY_USER";
 export type CertScheme = "ISCC_EU" | "ISCC_PLUS";
 export type OperatorType = "TRADER" | "PROCESSING_UNIT";
-export type ProductType = "BIOMETHANE" | "BIOLNG";
+export type ProductType = "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG";
+/** NM3 = normal cubic metre (0 C, 1 atm), the unit the client quotes gas conversion rates in. */
+export type Unit = "M3" | "NM3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH";
 export type TransactionType = "INBOUND" | "OUTBOUND" | "CONVERSION_IN" | "CONVERSION_OUT";
 export type PeriodStatus = "OPEN" | "CLOSED";
 export type AlertSeverity = "INFO" | "WARNING" | "CRITICAL";
@@ -21,7 +23,18 @@ export interface Site {
   locationId: string;
   country: string;
   certScheme: CertScheme;
+  /** Derived by the backend from the three stage flags below (any stage on =
+   * PROCESSING_UNIT) -- not set directly by the client anymore. */
   operatorType: OperatorType;
+  /** Conversion stages this site runs, in any combination: P1 = POME to
+   * Biogas, P2 = Biogas to Biomethane, P3 = Biomethane to Bio-LNG, P4 = Bio-LNG back
+   * to Biomethane (regasification). See
+   * CONVERSION_STAGES in lib/constants.ts (mirrors backend
+   * lib/conversionStages.ts). */
+  canConvertP1: boolean;
+  canConvertP2: boolean;
+  canConvertP3: boolean;
+  canConvertP4: boolean;
   multiSiteBalancingEnabled: boolean;
   defaultPeriodLengthMonths: number;
   createdAt: string;
@@ -102,7 +115,7 @@ export interface Batch {
   ghgValueType: "DDV" | "DV" | "AV";
   materialCategory: string;
   wasteStatus: "PRE_CONSUMER" | "POST_CONSUMER" | "MIXED" | "UNSPECIFIED" | null;
-  unit: "M3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH";
+  unit: Unit;
   productType: ProductType;
   isMerged: boolean;
   createdAt: string;
@@ -267,4 +280,35 @@ export interface ManagedUser {
 export interface ApiErrorBody {
   error: string;
   code?: string;
+}
+
+/** One allowed source unit for a conversion stage, from GET /conversions/stages. */
+export interface StageUnitRule {
+  sourceUnit: Unit;
+  targetUnit: Unit;
+  /** e.g. "Nm3 biogas per m3 POME" */
+  perUnitText: string;
+  /** The client document's typical range -- a HINT only, never applied or enforced. */
+  typical: { min: number; max: number; basis: string };
+}
+
+export interface StageInfo {
+  stage: "P1" | "P2" | "P3" | "P4";
+  source: ProductType;
+  target: ProductType;
+  label: string;
+  unitRules: StageUnitRule[];
+}
+
+/** A site's dated conversion rate (user-maintained; see backend ConversionRate). */
+export interface ConversionRate {
+  id: number;
+  siteId: number;
+  stage: "P1" | "P2" | "P3" | "P4";
+  sourceUnit: Unit;
+  factor: string;
+  minFactor: string | null;
+  maxFactor: string | null;
+  effectiveFrom: string;
+  note: string | null;
 }
