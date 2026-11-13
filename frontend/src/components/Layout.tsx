@@ -220,6 +220,10 @@ export function Layout() {
             <span className="name">{user?.name}</span>
             <span className="role">{user?.role}</span>
           </div>
+          <NavLink to="/account" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+            <UsersIcon />
+            Change password
+          </NavLink>
           <button className="nav-link" onClick={logout}>
             <LogoutIcon />
             Log out

@@ -21,6 +21,21 @@ export const generalApiLimiter = rateLimit({
  * across every cluster worker) and keyed on IP + attempted email -- IP
  * alone would let a distributed attacker spray one email from many IPs, or
  * let one shared corporate/NAT IP lock out every real user behind it. */
+/** Guards "change my password" against someone guessing the current password
+ * from a hijacked session. Keyed per signed-in user (not IP, so a shared office
+ * IP is not locked out together) and only failed attempts count. Must run after
+ * requireAuth. */
+export const passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  store: new PrismaRateLimitStore(),
+  keyGenerator: (req) => `pwchange:${req.user?.userId ?? "anon"}`,
+  message: { error: "Too many failed attempts. Try again in a few minutes.", code: "RATE_LIMITED" },
+});
+
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60_000,
   limit: 5,

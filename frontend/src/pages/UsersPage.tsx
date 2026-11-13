@@ -45,6 +45,38 @@ export function UsersPage() {
     load();
   }
 
+  // Admin resets another user's password (the user can then change it again
+  // themselves from "Change password" in the sidebar).
+  const [resetUser, setResetUser] = useState<ManagedUser | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
+
+  function openReset(u: ManagedUser) {
+    setResetUser(u);
+    setResetPassword("");
+    setResetError("");
+    setResetSuccess("");
+  }
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetUser) return;
+    setResetError("");
+    setResetBusy(true);
+    try {
+      await api.patch(`/auth/users/${resetUser.id}`, { password: resetPassword });
+      setResetSuccess(`Password updated for ${resetUser.email}. Tell them the new password.`);
+      setResetUser(null);
+      setResetPassword("");
+    } catch (err) {
+      setResetError(apiErrorMessage(err));
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -113,6 +145,28 @@ export function UsersPage() {
         </form>
       )}
 
+      {resetSuccess && <div className="alert-msg INFO">{resetSuccess}</div>}
+      {resetUser && (
+        <form className="panel" onSubmit={handleReset}>
+          <h2>Set password for {resetUser.name}</h2>
+          <div className="form-grid">
+            <div className="field">
+              <label>New password (min. 8 characters)</label>
+              <input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+            </div>
+          </div>
+          {resetError && <div className="error-msg">{resetError}</div>}
+          <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
+            <button className="btn" disabled={resetBusy}>
+              {resetBusy ? "Saving…" : "Save password"}
+            </button>
+            <button type="button" className="btn ghost" onClick={() => setResetUser(null)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
       {!users ? (
         <Loading />
       ) : (
@@ -137,7 +191,10 @@ export function UsersPage() {
                     <td>{u.role}</td>
                     <td>{u.role === "COMPANY_USER" ? (u.siteIds?.length > 0 ? u.siteIds.map(id => sites.find(s => s.id === id)?.name).filter(Boolean).join(", ") : "None") : "All sites"}</td>
                     <td>{u.isActive ? <Badge tone="ok">Active</Badge> : <Badge tone="warn">Disabled</Badge>}</td>
-                    <td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <button className="btn small ghost" onClick={() => openReset(u)} style={{ marginRight: 6 }}>
+                        Set password
+                      </button>
                       <button className="btn small ghost" onClick={() => toggleActive(u)}>
                         {u.isActive ? "Disable" : "Enable"}
                       </button>

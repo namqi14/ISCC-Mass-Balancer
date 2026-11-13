@@ -15,6 +15,7 @@ import { SchemeTransfersPage } from "./pages/SchemeTransfersPage";
 import { StockReadingsPage } from "./pages/StockReadingsPage";
 import { AuditLogPage } from "./pages/AuditLogPage";
 import { UsersPage } from "./pages/UsersPage";
+import { AccountPage } from "./pages/AccountPage";
 import { LandingPage } from "./pages/LandingPage";
 
 export default function App() {
@@ -48,6 +49,7 @@ export default function App() {
               }
             />
             <Route path="/audit-log" element={<AuditLogPage />} />
+            <Route path="/account" element={<AccountPage />} />
             <Route
               path="/users"
               element={

@@ -7,8 +7,9 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { AppError } from "../lib/errors";
 import { UserRole } from "@prisma/client";
-import { loginLimiter } from "../middleware/rateLimit";
+import { loginLimiter, passwordChangeLimiter } from "../middleware/rateLimit";
 import { getAccessibleSiteIds } from "../lib/siteAccess";
+import { logAudit } from "../lib/massBalanceEngine";
 
 export const authRouter = Router();
 
@@ -57,6 +58,42 @@ authRouter.get(
     const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
     if (!user) throw new AppError("User not found.", 404);
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, companyId: user.companyId });
+  })
+);
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password."),
+  newPassword: z.string().min(8, "New password must be at least 8 characters."),
+});
+
+// Self-service: any signed-in user (including COMPANY_USER, who cannot reach
+// the admin user-management routes below) changes their OWN password. The
+// current password is re-checked so a left-open session or stolen token alone
+// cannot take over the account.
+authRouter.post(
+  "/change-password",
+  requireAuth,
+  passwordChangeLimiter,
+  asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+    if (!user || !user.isActive) throw new AppError("User not found.", 404);
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new AppError("Current password is incorrect.", 400, "INVALID_CURRENT_PASSWORD");
+    if (currentPassword === newPassword) {
+      throw new AppError("New password must be different from the current one.", 400);
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await logAudit(prisma, {
+      companyId: user.companyId,
+      entityType: "User",
+      entityId: user.id,
+      action: "PASSWORD_CHANGE",
+      actor: { id: user.id, name: user.name },
+      notes: "User changed their own password.",
+    });
+    res.json({ ok: true });
   })
 );
 
@@ -256,6 +293,17 @@ authRouter.patch(
       data: { name: data.name, role: data.role, isActive: data.isActive, passwordHash },
     });
     if (data.siteIds !== undefined) await replaceSiteAccess(id, data.siteIds);
+    if (data.password) {
+      // Never log the password itself -- only that an admin reset it.
+      await logAudit(prisma, {
+        companyId: existing.companyId,
+        entityType: "User",
+        entityId: id,
+        action: "PASSWORD_RESET",
+        actor: { id: req.user!.userId, name: req.user!.name },
+        notes: `Password reset by admin for ${existing.email}.`,
+      });
+    }
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, isActive: user.isActive });
   })
 );
