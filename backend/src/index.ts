@@ -5,6 +5,7 @@ import path from "node:path";
 import express from "express";
 import cors from "cors";
 import { authRouter } from "./routes/auth.routes";
+import { lngRouter } from "./routes/lng.routes";
 import { oauthRouter } from "./routes/oauth.routes";
 import { companiesRouter } from "./routes/companies.routes";
 import { sitesRouter } from "./routes/sites.routes";
@@ -79,6 +80,7 @@ function startServer() {
   app.use("/api/conversions", conversionsRouter);
   app.use("/api/scheme-transfers", schemeTransfersRouter);
   app.use("/api/stock-readings", stockReadingsRouter);
+  app.use("/api/lng", lngRouter);
   app.use("/api/audit-log", auditLogRouter);
   app.use("/api/dashboard", dashboardRouter);
 

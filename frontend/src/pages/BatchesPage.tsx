@@ -59,7 +59,7 @@ function PoolCard({
       <div className="pool-card-head">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {canWrite && !b.isMerged && <input type="checkbox" checked={checked} onChange={onToggle} />}
-          <span className="batch-id">Batch #{b.id}</span>
+          <span className="batch-id">{b.lotRef ? `Lot ${b.lotRef}` : `Batch #${b.id}`}</span>
         </div>
         <span className="scheme-badge">{b.certScheme.replace("ISCC_", "ISCC ")}</span>
       </div>

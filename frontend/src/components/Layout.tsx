@@ -76,6 +76,15 @@ const StockIcon = () => (
   </svg>
 );
 
+// Droplet: the shared physical LNG stock (its own glyph so it is not mistaken
+// for the Physical Stock readings item, per DESIGN.md "each nav item has its own icon").
+const LngIcon = () => (
+  <svg {...iconProps}>
+    <path d="M12 3.5c3 3.7 5.5 6.5 5.5 10a5.5 5.5 0 0 1-11 0c0-3.5 2.5-6.3 5.5-10Z" {...s} />
+    <path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.4" {...s} />
+  </svg>
+);
+
 const CompanyIcon = () => (
   <svg {...iconProps}>
     <rect x="4.5" y="3.5" width="10" height="17" rx="1.3" {...s} />
@@ -124,6 +133,7 @@ const balancingNav: NavItem[] = [
   { to: "/conversions", label: "Conversions", icon: <ConversionsIcon /> },
   { to: "/scheme-transfers", label: "Scheme Transfers", icon: <TransferIcon /> },
   { to: "/stock-readings", label: "Physical Stock", icon: <StockIcon /> },
+  { to: "/lng-stock", label: "Physical LNG", icon: <LngIcon /> },
 ];
 
 const adminNav: NavItem[] = [

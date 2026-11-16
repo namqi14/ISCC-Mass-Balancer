@@ -116,6 +116,15 @@ enum Unit {
   M3_15C
   J
   KWH
+  MMBTU // million British thermal units -- the common energy unit in the client's PEGT workbook
+}
+
+// Movements out of the shared physical (uncertified) LNG ledger: a DEDUCTION is
+// booked by a liquefaction (the conventional LNG that goes with the credit), an
+// OUTGOING is conventional LNG sold or delivered. See LngLot.
+enum LngMovementType {
+  DEDUCTION
+  OUTGOING
 }
 
 // The four conversion steps (client clarification, 2026-10-16 / 2026-10-19):
@@ -179,6 +188,8 @@ model Company {
   conversionRates       ConversionRate[]
   conversionLines       ConversionLine[]
   schemeTransfers       SchemeTransfer[]
+  lngLots               LngLot[]
+  lngMovements          LngMovement[]
   physicalStockReadings PhysicalStockReading[]
   periodBalances        PeriodBalance[]
   auditLog              AuditLogEntry[]
@@ -202,6 +213,8 @@ model User {
   conversionEventsCreated ConversionEvent[]
   schemeTransfersCreated  SchemeTransfer[]
   stockReadingsRecorded   PhysicalStockReading[]
+  lngLotsCreated          LngLot[]
+  lngMovementsCreated     LngMovement[]
   auditLogEntries         AuditLogEntry[]
   periodsClosed           Period[]
   siteAccess              UserSiteAccess[]
@@ -250,20 +263,20 @@ model Site {
   // history of past ones -- when a certificate renews, these get updated in
   // place; already-closed periods aren't retroactively re-validated against
   // whatever the fields say later.
-  certificateNumber   String?   @db.VarChar(100)
-  certifyingBody      String?   @db.VarChar(300)
-  certifiedFrom       DateTime? @db.Date
-  certifiedTo         DateTime? @db.Date
+  certificateNumber         String?      @db.VarChar(100)
+  certifyingBody            String?      @db.VarChar(300)
+  certifiedFrom             DateTime?    @db.Date
+  certifiedTo               DateTime?    @db.Date
   // Free-text, comma-separated (e.g. "Point of Origin, Biogas plant,
   // Biomethane plant") -- descriptive only, not used in any enforcement
   // logic, so a plain string matches how PhysicalDocument.documentType is
   // already handled rather than a stricter structure.
-  certifiedSiteRoles  String?   @db.VarChar(300)
+  certifiedSiteRoles        String?      @db.VarChar(300)
   // The certificate PDF itself, once uploaded via POST /sites/parse-certificate
   // (AI-assisted autofill of the five fields above) -- same nullable
   // path-string convention as Company.logoUrl, served by the same /uploads
   // static mount (backend/src/index.ts).
-  certificateFileUrl String?   @db.VarChar(500)
+  certificateFileUrl        String?      @db.VarChar(500)
   createdAt                 DateTime     @default(now())
 
   company Company @relation(fields: [companyId], references: [id])
@@ -271,7 +284,10 @@ model Site {
   periods               Period[]
   batches               Batch[]
   transactions          Transaction[]
-  conversionEvents      ConversionEvent[]
+  conversionEvents      ConversionEvent[]      @relation("EventSite")
+  conversionEventsAtPu  ConversionEvent[]      @relation("EventPuSite")
+  lngLots               LngLot[]
+  lngMovements          LngMovement[]
   conversionRates       ConversionRate[]
   schemeTransfersOut    SchemeTransfer[]       @relation("SourceSite")
   schemeTransfersIn     SchemeTransfer[]       @relation("TargetSite")
@@ -354,40 +370,46 @@ model PhysicalDocument {
 }
 
 model Batch {
-  id              Int         @id @default(autoincrement())
-  companyId       Int
-  siteId          Int
-  certScheme      CertScheme
+  id               Int          @id @default(autoincrement())
+  companyId        Int
+  siteId           Int
+  certScheme       CertScheme
   // Sustainability-attribute grouping key: rawMaterial + countryOfOrigin +
   // ghgValue + productType together define which "pool" a batch belongs to.
-  rawMaterial     String      @db.VarChar(150)
-  countryOfOrigin String      @db.VarChar(100)
-  ghgValue        Decimal     @db.Decimal(10, 4) // gCO2eq/MJ
-  productType     ProductType
+  rawMaterial      String       @db.VarChar(150)
+  countryOfOrigin  String       @db.VarChar(100)
+  ghgValue         Decimal      @db.Decimal(10, 4) // gCO2eq/MJ
+  productType      ProductType
   // How the supplier prepared ghgValue (client clarification: recorded as
   // given, this app never derives one GHG type from another). No app-level
   // default -- always deliberately chosen by whoever books the delivery.
-  ghgValueType    GhgValueType
+  ghgValueType     GhgValueType
   // Scheme-dependent controlled vocabulary, validated at the Zod layer
   // (see recordTransaction's caller) rather than a DB enum -- EU and PLUS
   // use genuinely different category vocabularies (EU: Annex IX Part A/B,
   // Other/Unclassified, Waste & Residues; PLUS: Bio, Bio-Circular,
   // Circular, Renewable energy-derived), and a plain validated string
   // avoids MySQL enum-alteration friction if ISCC revises the wording.
-  materialCategory String     @db.VarChar(60)
+  materialCategory String       @db.VarChar(60)
   // Required only when materialCategory = "Bio-Circular" (client
   // clarification); null otherwise.
   wasteStatus      WasteStatus?
   // Every transaction against this pool must match this unit -- see the
   // pool-uniqueness comment below for why unit had to join the grouping key
   // rather than live per-transaction.
-  unit             Unit        @default(M3)
-  isMerged        Boolean     @default(false)
-  createdAt       DateTime    @default(now())
+  unit             Unit         @default(M3)
+  // Set when the stock is tracked as an individual LOT (the client's workbook
+  // gives every receipt and every conversion output its own lot id, e.g.
+  // "EU-IN-20261002-GMES-BM-2026-10"). Null = an ordinary pooled batch, which is
+  // how all earlier data and any caller that supplies no reference behaves.
+  lotRef           String?      @db.VarChar(200)
+  isMerged         Boolean      @default(false)
+  createdAt        DateTime     @default(now())
   // Pool uniqueness is enforced by a PARTIAL UNIQUE INDEX that Prisma can't
-  // model, so it lives only in the baseline migration SQL
+  // model, so it lives only in the migration SQL
   // (`batches_pool_unique`): UNIQUE (companyId, siteId, certScheme, rawMaterial,
-  // countryOfOrigin, productType, ghgValue, unit) WHERE isMerged = false.
+  // countryOfOrigin, productType, ghgValue, unit, COALESCE(lotRef,''))
+  // WHERE isMerged = false.
   // Merged batches (which can legitimately share a tuple with an unmerged one,
   // e.g. inheriting a source's raw material) are entirely unconstrained, while
   // two unmerged pools for the same site/scheme/feedstock/origin/product/GHG/
@@ -458,6 +480,17 @@ model Transaction {
   // only ever look at this table -- automatically pick up transfer volume
   // without a separate code path. From Database Schema.pdf.
   schemeTransferId       Int?
+  // The client workbook's own references (plain text: document identifiers,
+  // not personal data; supplier/customer names stay in the encrypted
+  // counterparty fields above). `reference` = receipt ref (INBOUND) or
+  // sales/delivery ref (OUTBOUND); `sdPosRef` = the supplier's (INBOUND) or our
+  // outgoing (OUTBOUND) Sustainability Declaration / Proof of Sustainability;
+  // `location` = storage/receipt or dispatch location; `certifiedClaim` is the
+  // outgoing "certified claim?" flag.
+  reference              String?         @db.VarChar(200)
+  sdPosRef               String?         @db.VarChar(200)
+  location               String?         @db.VarChar(200)
+  certifiedClaim         Boolean?
   createdAt              DateTime        @default(now())
   createdById            Int?
 
@@ -488,18 +521,95 @@ model ConversionEvent {
   periodId           Int
   conversionFactorCf Decimal  @db.Decimal(10, 6)
   conversionDate     DateTime @db.Date
+  // Tolling (client workbook, "PU Conversion" tab): the conversion is processed
+  // at another site (the processing unit) while the stock and the output lot
+  // stay with the trader site in `siteId`. The PU gets no ledger rows -- the
+  // credit passes through it and nets to zero.
+  puSiteId           Int?
+  reference          String?  @db.VarChar(200) // conversion ref -> output lot "<scheme>-CV-<ref>"
+  instructionRef     String?  @db.VarChar(200) // tolling agreement / instruction ref
+  // Added on top of the source GHG to give the output lot's GHG (gCO2e/MJ).
+  processingGhg      Decimal? @db.Decimal(10, 4)
+  // Conventional LNG deducted from the shared physical ledger (liquefaction).
+  lngLotId           Int?
+  lngQuantity        Decimal? @db.Decimal(18, 3)
   createdAt          DateTime @default(now())
   createdById        Int?
 
-  company   Company          @relation(fields: [companyId], references: [id])
-  site      Site             @relation(fields: [siteId], references: [id])
-  period    Period           @relation(fields: [periodId], references: [id])
-  createdBy User?            @relation(fields: [createdById], references: [id])
-  lines     ConversionLine[]
+  company      Company          @relation(fields: [companyId], references: [id])
+  site         Site             @relation("EventSite", fields: [siteId], references: [id])
+  puSite       Site?            @relation("EventPuSite", fields: [puSiteId], references: [id])
+  period       Period           @relation(fields: [periodId], references: [id])
+  createdBy    User?            @relation(fields: [createdById], references: [id])
+  lngLot       LngLot?          @relation(fields: [lngLotId], references: [id])
+  lines        ConversionLine[]
+  lngMovements LngMovement[]
 
   @@index([companyId])
   @@index([periodId])
   @@map("conversion_events")
+}
+
+// ---------------------------------------------------------------------------
+// Shared physical (uncertified) LNG ledger -- client workbook "Physical LNG
+// Summary". Conventional LNG is held in ONE physical pool shared by EU and
+// PLUS; each liquefaction deducts the LNG that goes with the credit. It is
+// deliberately NOT part of Batch/certification logic: it carries no scheme and
+// is never certified. Balance of a lot = quantity - sum(its movements).
+// ---------------------------------------------------------------------------
+
+model LngLot {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  siteId       Int
+  lotRef       String   @db.VarChar(200) // e.g. "LNG-20261005-LNG-SUPP-PEGT-2026-10"
+  receiptDate  DateTime @db.Date
+  quantity     Decimal  @db.Decimal(18, 3)
+  unit         Unit     @default(MMBTU)
+  // Encrypted at rest like the other counterparty names (fieldEncryption.ts).
+  supplierName String?  @db.VarChar(500)
+  reference    String?  @db.VarChar(200) // receipt ref
+  createdAt    DateTime @default(now())
+  createdById  Int?
+
+  company          Company           @relation(fields: [companyId], references: [id])
+  site             Site              @relation(fields: [siteId], references: [id])
+  createdBy        User?             @relation(fields: [createdById], references: [id])
+  movements        LngMovement[]
+  conversionEvents ConversionEvent[]
+
+  @@unique([companyId, siteId, lotRef], name: "uq_lng_lot_ref")
+  @@index([companyId])
+  @@index([siteId])
+  @@map("lng_lots")
+}
+
+model LngMovement {
+  id                Int             @id @default(autoincrement())
+  companyId         Int
+  siteId            Int
+  lngLotId          Int
+  type              LngMovementType
+  quantity          Decimal         @db.Decimal(18, 3)
+  movementDate      DateTime        @db.Date
+  // Which scheme's liquefaction used it (DEDUCTION only), so EU and PLUS
+  // allocations can be shown separately later.
+  certScheme        CertScheme?
+  conversionEventId Int?
+  reference         String?         @db.VarChar(200)
+  customer          String?         @db.VarChar(500) // OUTGOING; encrypted like counterparty names
+  createdAt         DateTime        @default(now())
+  createdById       Int?
+
+  company         Company          @relation(fields: [companyId], references: [id])
+  site            Site             @relation(fields: [siteId], references: [id])
+  lngLot          LngLot           @relation(fields: [lngLotId], references: [id])
+  conversionEvent ConversionEvent? @relation(fields: [conversionEventId], references: [id])
+  createdBy       User?            @relation(fields: [createdById], references: [id])
+
+  @@index([companyId])
+  @@index([lngLotId])
+  @@map("lng_movements")
 }
 
 model ConversionLine {
@@ -696,17 +806,17 @@ model RateLimitCounter {
 // used by two different companies (or the same company twice with different
 // request bodies) is distinguishable.
 model IdempotencyKey {
-  id             Int      @id @default(autoincrement())
-  key            String   @db.VarChar(200)
+  id             Int       @id @default(autoincrement())
+  key            String    @db.VarChar(200)
   companyId      Int
   userId         Int
-  route          String   @db.VarChar(200)
-  method         String   @db.VarChar(10)
-  requestHash    String   @db.VarChar(64) // sha256 hex
-  status         String   @db.VarChar(20) // IN_PROGRESS | COMPLETED | FAILED
+  route          String    @db.VarChar(200)
+  method         String    @db.VarChar(10)
+  requestHash    String    @db.VarChar(64) // sha256 hex
+  status         String    @db.VarChar(20) // IN_PROGRESS | COMPLETED | FAILED
   responseStatus Int?
-  responseBody   String?  @db.Text
-  createdAt      DateTime @default(now())
+  responseBody   String?   @db.Text
+  createdAt      DateTime  @default(now())
   completedAt    DateTime?
 
   @@unique([companyId, key])

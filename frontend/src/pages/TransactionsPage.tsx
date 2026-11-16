@@ -4,7 +4,7 @@ import type { Batch, Period, ProductType, Site, Unit } from "../api/types";
 import { fmt } from "../lib/format";
 import { PageHeader } from "../components/Ui";
 
-import { COUNTRIES, FEEDSTOCKS, EU_MATERIAL_CATEGORIES, PLUS_MATERIAL_CATEGORIES } from "../lib/constants";
+import { COUNTRIES, FEEDSTOCKS, EU_MATERIAL_CATEGORIES, PLUS_MATERIAL_CATEGORIES, UNIT_LABELS } from "../lib/constants";
 
 export function TransactionsPage() {
   const [txType, setTxType] = useState<"INBOUND" | "OUTBOUND">("INBOUND");
@@ -18,6 +18,13 @@ export function TransactionsPage() {
   const [transactionDate, setTransactionDate] = useState("");
   const [counterpartyName, setCounterpartyName] = useState("");
   const [counterpartyCertNumber, setCounterpartyCertNumber] = useState("");
+  // The client workbook's own references: receipt ref / delivery ref, SD or PoS
+  // ref, and the storage / dispatch location. A receipt reference makes the
+  // receipt its own lot.
+  const [reference, setReference] = useState("");
+  const [sdPosRef, setSdPosRef] = useState("");
+  const [location, setLocation] = useState("");
+  const [certifiedClaim, setCertifiedClaim] = useState(true);
 
   // inbound-only
   const [productType, setProductType] = useState<ProductType>("BIOMETHANE");
@@ -99,6 +106,11 @@ export function TransactionsPage() {
           : { title: "Physical document", detail: "No inbound credit without a weighbridge ticket or delivery note (Rule 3).", tone: "pending" }
       );
       rows.push(
+        reference.trim()
+          ? { title: "Lot reference", detail: "Booked as its own lot. A duplicate receipt reference is rejected server-side.", tone: "pending" }
+          : { title: "Lot reference", detail: "No receipt reference: pools with matching stock instead of forming its own lot.", tone: "pending" }
+      );
+      rows.push(
         materialCategory === "Bio-Circular"
           ? wasteStatus
             ? { title: "Waste status", detail: "Waste status specified for Bio-Circular material.", tone: "ok" }
@@ -133,7 +145,7 @@ export function TransactionsPage() {
     rows.push({ title: "Worst-case GHG on merge", detail: "Applied automatically if this volume merges into an existing pool (Rule 7).", tone: "pending" });
     rows.push({ title: "Stock tolerance", detail: "Checked at period close, not at entry (Rule 8).", tone: "pending" });
     return rows;
-  }, [siteId, periodId, txType, docNumber, docDate, docType, volumeNum, selectedBatch, materialCategory, wasteStatus]);
+  }, [siteId, periodId, txType, docNumber, docDate, docType, volumeNum, selectedBatch, materialCategory, wasteStatus, reference]);
 
   function resetMessages() {
     setError("");
@@ -162,11 +174,20 @@ export function TransactionsPage() {
         transactionDate,
         counterpartyName: counterpartyName || undefined,
         counterpartyCertNumber: counterpartyCertNumber || undefined,
+        reference: reference.trim() || undefined,
+        sdPosRef: sdPosRef.trim() || undefined,
+        location: location.trim() || undefined,
         physicalDocument: { documentType: docType, documentNumber: docNumber, documentDate: docDate, issuedBy: issuedBy || undefined },
       });
-      setSuccess("Inbound transaction recorded.");
+      setSuccess(
+        reference.trim()
+          ? "Inbound transaction recorded as its own lot. The lot id appears under Pools & Balances."
+          : "Inbound transaction recorded."
+      );
       setVolume("");
       setDocNumber("");
+      setReference("");
+      setSdPosRef("");
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -188,9 +209,15 @@ export function TransactionsPage() {
         transactionDate,
         counterpartyName: counterpartyName || undefined,
         counterpartyCertNumber: counterpartyCertNumber || undefined,
+        reference: reference.trim() || undefined,
+        sdPosRef: sdPosRef.trim() || undefined,
+        location: location.trim() || undefined,
+        certifiedClaim,
       });
       setSuccess("Outbound transaction recorded.");
       setVolume("");
+      setReference("");
+      setSdPosRef("");
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -257,9 +284,28 @@ export function TransactionsPage() {
               
               {txType === "INBOUND" ? (
                 <>
-                  <div className="tx-field span2">
-                    <label>Counterparty</label>
+                  <div className="tx-field">
+                    <label>Supplier</label>
                     <input value={counterpartyName} onChange={(e) => setCounterpartyName(e.target.value)} placeholder="e.g. Sime Darby Plantation" />
+                  </div>
+                  <div className="tx-field">
+                    <label>Supplier certificate</label>
+                    <input value={counterpartyCertNumber} onChange={(e) => setCounterpartyCertNumber(e.target.value)} placeholder="e.g. EU-ISCC-Cert-ID..." />
+                  </div>
+                  <div className="tx-field">
+                    <label>Receipt reference</label>
+                    <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. GMES-BM-2026-10" />
+                  </div>
+                  <div className="tx-field">
+                    <label>Supplier SD / PoS reference</label>
+                    <input value={sdPosRef} onChange={(e) => setSdPosRef(e.target.value)} />
+                  </div>
+                  <div className="tx-field span2">
+                    <label>Storage / receipt location</label>
+                    <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. PLNG2 Pengerang (Storage)" />
+                    <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280" }}>
+                      With a receipt reference, this receipt becomes its own lot (e.g. EU-IN-20261002-GMES-BM-2026-10) and is not pooled with other receipts.
+                    </div>
                   </div>
                   <div className="tx-field">
                     <label>Quantity</label>
@@ -273,6 +319,7 @@ export function TransactionsPage() {
                         <option value="M3_15C">m³ (15°C)</option>
                         <option value="J">J</option>
                         <option value="KWH">kWh</option>
+                        <option value="MMBTU">MMBtu</option>
                       </select>
                     </div>
                   </div>
@@ -351,18 +398,37 @@ export function TransactionsPage() {
                       <option value="">— choose a matching pool —</option>
                       {batches.filter((b) => !b.isMerged || true).map((b) => (
                         <option key={b.id} value={b.id}>
-                          [{b.certScheme.replace("ISCC_", "")}] {b.productType} · {b.rawMaterial} / {b.countryOfOrigin} / GHG {b.ghgValue} — avail: {fmt(b.availableVolume)}
+                          {b.lotRef ? `${b.lotRef} · ` : `[${b.certScheme.replace("ISCC_", "")}] `}{b.productType} · {b.rawMaterial} / {b.countryOfOrigin} / GHG {b.ghgValue} — avail: {fmt(b.availableVolume)} {UNIT_LABELS[b.unit]}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div className="tx-field">
-                    <label>Counterparty</label>
+                    <label>Customer</label>
                     <input value={counterpartyName} onChange={(e) => setCounterpartyName(e.target.value)} />
                   </div>
                   <div className="tx-field">
-                    <label>Quantity (MWh/t)</label>
+                    <label>Quantity{selectedBatch ? ` (${UNIT_LABELS[selectedBatch.unit]})` : ""}</label>
                     <input type="number" step="any" min="0" value={volume} onChange={(e) => setVolume(e.target.value)} required />
+                  </div>
+                  <div className="tx-field">
+                    <label>Delivery / sales reference</label>
+                    <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. Bio-LNG-PEGT-Seller-10(1)" />
+                  </div>
+                  <div className="tx-field">
+                    <label>Outgoing SD / PoS reference</label>
+                    <input value={sdPosRef} onChange={(e) => setSdPosRef(e.target.value)} />
+                  </div>
+                  <div className="tx-field">
+                    <label>Dispatch location</label>
+                    <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. PLNG2 Pengerang (Storage)" />
+                  </div>
+                  <div className="tx-field">
+                    <label>Certified claim</label>
+                    <select value={certifiedClaim ? "yes" : "no"} onChange={(e) => setCertifiedClaim(e.target.value === "yes")}>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
                   </div>
                 </>
               )}

@@ -14,6 +14,7 @@ import { TransactionLogPage } from "./pages/TransactionLogPage";
 import { ConversionsPage } from "./pages/ConversionsPage";
 import { SchemeTransfersPage } from "./pages/SchemeTransfersPage";
 import { StockReadingsPage } from "./pages/StockReadingsPage";
+import { LngStockPage } from "./pages/LngStockPage";
 import { AuditLogPage } from "./pages/AuditLogPage";
 import { UsersPage } from "./pages/UsersPage";
 import { AccountPage } from "./pages/AccountPage";
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="/conversions" element={<ConversionsPage />} />
             <Route path="/scheme-transfers" element={<SchemeTransfersPage />} />
             <Route path="/stock-readings" element={<StockReadingsPage />} />
+            <Route path="/lng-stock" element={<LngStockPage />} />
             <Route
               path="/company-profile"
               element={

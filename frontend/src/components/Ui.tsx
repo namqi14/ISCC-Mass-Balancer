@@ -1,6 +1,7 @@
 import React from "react";
 import type { Alert, PeriodTrendPoint } from "../api/types";
 import { fmt, fmtDate } from "../lib/format";
+import { UNIT_LABELS } from "../lib/constants";
 
 export function Badge({ tone, children }: { tone: "ok" | "warn" | "neutral" | "blue"; children: React.ReactNode }) {
   return <span className={`badge ${tone}`}>{children}</span>;
@@ -122,7 +123,7 @@ export function TrendChart({ points }: { points: PeriodTrendPoint[] }) {
                 
                 {/* Value tooltip-like text, but only for first and last, or hover */}
                 <text className="bar-value" x={x} y={y - 15} textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}>
-                  {fmt(p.closingBalance, 0)} MWh
+                  {fmt(p.closingBalance, 0)}{p.unit ? ` ${UNIT_LABELS[p.unit]}` : ""}
                 </text>
                 
                 {/* X-axis label */}

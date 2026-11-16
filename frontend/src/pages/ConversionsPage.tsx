@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
-import type { Batch, ConversionEvent, ConversionRate, Period, Site, StageInfo } from "../api/types";
+import type { Batch, ConversionEvent, ConversionRate, LngLot, Period, Site, StageInfo } from "../api/types";
 import { useAuth } from "../context/AuthContext";
 import { Loading, EmptyState, PageHeader } from "../components/Ui";
 import { fmt, fmtDate } from "../lib/format";
@@ -28,6 +28,17 @@ export function ConversionsPage() {
   const [conversionFactorCf, setConversionFactorCf] = useState("");
   const [conversionDate, setConversionDate] = useState(today());
 
+  // Tolling (client workbook "PU Conversion" tab): the stock and the output lot
+  // stay with the booking (trader) site, while the processing unit named here
+  // does the conversion -- its stages and rates apply.
+  const [tolling, setTolling] = useState(false);
+  const [puSiteId, setPuSiteId] = useState<number | "">("");
+  const [reference, setReference] = useState("");
+  const [instructionRef, setInstructionRef] = useState("");
+  const [processingGhg, setProcessingGhg] = useState("");
+  const [lngLots, setLngLots] = useState<LngLot[]>([]);
+  const [lngLotId, setLngLotId] = useState<number | "">("");
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -37,7 +48,10 @@ export function ConversionsPage() {
   // Profile > Sites) can run conversions at all.
   const processingSites = useMemo(() => sites.filter((s) => enabledStages(s).length > 0), [sites]);
   const site = useMemo(() => sites.find((s) => s.id === siteId), [sites, siteId]);
-  const siteStageList = useMemo(() => (site ? enabledStages(site) : []), [site]);
+  // The site whose stages and rates apply: the processing unit when tolling.
+  const puSite = useMemo(() => (tolling ? sites.find((s) => s.id === puSiteId) : undefined), [sites, tolling, puSiteId]);
+  const stageSite = tolling ? puSite : site;
+  const siteStageList = useMemo(() => (stageSite ? enabledStages(stageSite) : []), [stageSite]);
 
   // A conversion is exactly one step of the chain, and a rate is only
   // meaningful in its own unit -- so only pools that are the INPUT of one of
@@ -71,6 +85,11 @@ export function ConversionsPage() {
 
   const cf = Number(conversionFactorCf);
   const resultVolume = sourceVolume && conversionFactorCf ? Number(sourceVolume) * cf : 0;
+  // Output GHG = source GHG + processing GHG (e.g. 32 + 13.48 = 45.48).
+  const outputGhg = sourceBatch ? Math.round((Number(sourceBatch.ghgValue) + (processingGhg ? Number(processingGhg) : 0)) * 10000) / 10000 : null;
+  // Conventional LNG goes with a liquefaction (P3); only lots in the output unit with stock left.
+  const isLiquefaction = activeStage?.stage === "P3";
+  const usableLngLots = lngLots.filter((l) => Number(l.remaining) > 0 && (!rule || l.unit === rule.targetUnit));
   const rangeWarning = (() => {
     if (!inForce || !conversionFactorCf) return null;
     const min = inForce.minFactor ? Number(inForce.minFactor) : null;
@@ -87,6 +106,9 @@ export function ConversionsPage() {
   function loadBatches() {
     if (siteId) api.get<Batch[]>("/batches", { params: { siteId } }).then((res) => setBatches(res.data));
   }
+  function loadLngLots() {
+    if (siteId) api.get<LngLot[]>("/lng/lots", { params: { siteId } }).then((res) => setLngLots(res.data)).catch(() => setLngLots([]));
+  }
 
   useEffect(() => {
     api.get<Site[]>("/sites").then((res) => setSites(res.data));
@@ -102,20 +124,23 @@ export function ConversionsPage() {
     }
     api.get<Period[]>("/periods", { params: { siteId } }).then((res) => setPeriods(res.data.filter((p) => p.status === "OPEN")));
     loadBatches();
+    loadLngLots();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId]);
 
-  // The rate in force depends on the site and the conversion DATE.
+  // The rate in force depends on the site that does the conversion (the PU when
+  // tolling) and the conversion DATE.
+  const rateSiteId = tolling ? puSiteId : siteId;
   useEffect(() => {
-    if (!siteId || !conversionDate) {
+    if (!rateSiteId || !conversionDate) {
       setInForceRates([]);
       return;
     }
     api
-      .get<ConversionRate[]>("/conversions/rates", { params: { siteId, asOf: conversionDate } })
+      .get<ConversionRate[]>("/conversions/rates", { params: { siteId: rateSiteId, asOf: conversionDate } })
       .then((res) => setInForceRates(res.data))
       .catch(() => setInForceRates([]));
-  }, [siteId, conversionDate]);
+  }, [rateSiteId, conversionDate]);
 
   // Pre-fill the factor from the rate in force for the chosen pool and date.
   // No rate set -> leave it empty so the user types it (nothing is assumed).
@@ -139,12 +164,28 @@ export function ConversionsPage() {
         conversionFactorCf: Number(conversionFactorCf),
         conversionDate,
         targetProductType,
+        ...(tolling
+          ? {
+              puSiteId,
+              reference: reference.trim() || undefined,
+              instructionRef: instructionRef.trim() || undefined,
+              processingGhg: processingGhg !== "" ? Number(processingGhg) : undefined,
+              lngLotId: isLiquefaction && lngLotId ? lngLotId : undefined,
+            }
+          : {}),
       });
-      setSuccess("Conversion recorded.");
+      setSuccess(
+        tolling && reference.trim()
+          ? `Conversion recorded. The output is its own lot, ${res.data?.targetBatch?.lotRef ?? ""}.`
+          : "Conversion recorded."
+      );
       setWarnings(res.data?.warnings ?? []);
       setSourceVolume("");
+      setReference("");
+      setLngLotId("");
       loadEvents();
       loadBatches();
+      loadLngLots();
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -168,26 +209,67 @@ export function ConversionsPage() {
           <h2>New conversion</h2>
           <div className="form-grid">
             <div className="field span2">
-              <label>Site</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: "normal", textTransform: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={tolling}
+                  onChange={(e) => {
+                    setTolling(e.target.checked);
+                    setSourceBatchId("");
+                    setPuSiteId("");
+                    setLngLotId("");
+                  }}
+                />
+                Processed at another site (tolling) — the stock stays with the trader, the processing unit converts it
+              </label>
+            </div>
+            <div className="field span2">
+              <label>{tolling ? "Trader site (books the stock and the output lot)" : "Site"}</label>
               <select
                 value={siteId}
                 onChange={(e) => {
                   setSiteId(Number(e.target.value));
                   setSourceBatchId("");
+                  setLngLotId("");
                 }}
                 required
               >
                 <option value="">— select site —</option>
-                {processingSites.map((s) => (
+                {(tolling ? sites : processingSites).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
               </select>
-              {sites.length > 0 && processingSites.length === 0 && (
+              {!tolling && sites.length > 0 && processingSites.length === 0 && (
                 <div className="hint">No site has a conversion stage yet — tick the stages a site runs in Company Profile.</div>
               )}
             </div>
+            {tolling && (
+              <div className="field span2">
+                <label>Processing unit (PU) site</label>
+                <select
+                  value={puSiteId}
+                  onChange={(e) => {
+                    setPuSiteId(Number(e.target.value));
+                    setSourceBatchId("");
+                  }}
+                  required
+                >
+                  <option value="">— select processing unit —</option>
+                  {processingSites
+                    .filter((s) => s.id !== siteId)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+                {processingSites.length === 0 && (
+                  <div className="hint">No site has a conversion stage yet — tick the stages the processing unit runs in Company Profile.</div>
+                )}
+              </div>
+            )}
             <div className="field">
               <label>Open period</label>
               <select value={periodId} onChange={(e) => setPeriodId(Number(e.target.value))} required>
@@ -210,14 +292,14 @@ export function ConversionsPage() {
                 <option value="">— choose a pool —</option>
                 {convertiblePools.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {PRODUCT_LABELS[b.productType]} · {b.rawMaterial} / {b.countryOfOrigin} / GHG {b.ghgValue} — avail:{" "}
+                    {b.lotRef ? `${b.lotRef} · ` : ""}{PRODUCT_LABELS[b.productType]} · {b.rawMaterial} / {b.countryOfOrigin} / GHG {b.ghgValue} — avail:{" "}
                     {fmt(b.availableVolume)} {UNIT_LABELS[b.unit]}
                   </option>
                 ))}
               </select>
-              {site && (
+              {stageSite && (
                 <div className="hint">
-                  This site runs: {siteStageList.map((st) => st.label).join(", ")}.
+                  {tolling ? "The processing unit runs" : "This site runs"}: {siteStageList.map((st) => st.label).join(", ")}.
                   {convertiblePools.length === 0 && " No pool here is an input for those stages yet — book the input product in first (Transactions)."}
                   {hiddenForUnit.length > 0 &&
                     ` ${hiddenForUnit.length} pool${hiddenForUnit.length === 1 ? " is" : "s are"} hidden because the unit doesn't fit the stage (${[
@@ -250,6 +332,45 @@ export function ConversionsPage() {
               <label>Resulting volume{rule ? ` (${UNIT_LABELS[rule.targetUnit]})` : ""}</label>
               <input value={fmt(resultVolume)} disabled />
             </div>
+            {tolling && (
+              <>
+                <div className="field">
+                  <label>Conversion reference</label>
+                  <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PEGT-RGTP-CONV-10(1)" />
+                  <div className="hint">With a reference, the output becomes its own lot (e.g. EU-CV-PEGT-RGTP-CONV-10(1)).</div>
+                </div>
+                <div className="field">
+                  <label>Tolling agreement / instruction ref.</label>
+                  <input value={instructionRef} onChange={(e) => setInstructionRef(e.target.value)} placeholder="e.g. Nomination Oct 2026 (1)" />
+                </div>
+                <div className="field">
+                  <label>Processing GHG added (gCO2e/MJ)</label>
+                  <input type="number" step="any" min="0" value={processingGhg} onChange={(e) => setProcessingGhg(e.target.value)} placeholder="0" />
+                </div>
+                <div className="field">
+                  <label>Output GHG (gCO2e/MJ)</label>
+                  <input value={outputGhg === null ? "—" : String(outputGhg)} disabled />
+                  <div className="hint">Source GHG plus the processing GHG.</div>
+                </div>
+                {isLiquefaction && (
+                  <div className="field span2">
+                    <label>Conventional LNG lot (deducted from the shared physical stock)</label>
+                    <select value={lngLotId} onChange={(e) => setLngLotId(e.target.value ? Number(e.target.value) : "")}>
+                      <option value="">— none —</option>
+                      {usableLngLots.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.lotRef} — remaining {fmt(l.remaining)} {UNIT_LABELS[l.unit]}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="hint">
+                      The output quantity ({fmt(resultVolume)}) is deducted from this lot. Add LNG receipts under Physical LNG.
+                      {usableLngLots.length === 0 && " No LNG lot with stock left at the trader site yet."}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {rangeWarning && <div className="alert-msg WARNING">{rangeWarning}</div>}
@@ -284,6 +405,7 @@ export function ConversionsPage() {
                   <th className="num">Factor</th>
                   <th>Input</th>
                   <th>Output</th>
+                  <th>Tolling / lot</th>
                 </tr>
               </thead>
               <tbody>
@@ -300,6 +422,13 @@ export function ConversionsPage() {
                       </td>
                       <td>
                         {output?.batch ? PRODUCT_LABELS[output.batch.productType] : ""} — {withUnit(output)}
+                      </td>
+                      <td>
+                        {ev.puSite ? `At ${ev.puSite.name}` : ""}
+                        {ev.reference ? `${ev.puSite ? " · " : ""}ref ${ev.reference}` : ""}
+                        {output?.batch?.lotRef ? ` · lot ${output.batch.lotRef}` : ""}
+                        {ev.processingGhg ? ` · GHG ${input?.batch?.ghgValue ?? ""} + ${fmt(ev.processingGhg)} = ${output?.batch?.ghgValue ?? ""}` : ""}
+                        {ev.lngLot ? ` · LNG ${ev.lngLot.lotRef} -${fmt(ev.lngQuantity ?? "0")}` : ""}
                       </td>
                     </tr>
                   );

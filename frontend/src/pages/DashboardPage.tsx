@@ -1,9 +1,25 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import type { DashboardData, Batch, Period, Transaction } from "../api/types";
+import type { DashboardBalance, DashboardData, Batch, Period, ProductType, Transaction } from "../api/types";
 import { StatCard, Loading, TrendChart, PageHeader } from "../components/Ui";
 import { fmt, fmtDate, isNegative } from "../lib/format";
+import { UNIT_LABELS } from "../lib/constants";
+
+/** One line per unit the product is held in -- volumes in different units are never added together. */
+function BalanceValue({ balances }: { balances: DashboardBalance[] }) {
+  if (balances.length === 0) return <>0</>;
+  return (
+    <>
+      {balances.map((b) => (
+        <div key={b.unit}>
+          {fmt(b.volume)} <span className="text-sm font-medium text-[var(--text-dim)]">{UNIT_LABELS[b.unit]}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -29,6 +45,14 @@ export function DashboardPage() {
 
   const openPeriod = periods.length > 0 ? periods[0] : null;
 
+  const balancesFor = (productType: ProductType) => (data ? data.balances.filter((b) => b.productType === productType) : []);
+  // The trend chart shows closing BIOMETHANE balances. They can only share one
+  // axis if they share a unit, so it plots the periods in the most recent
+  // period's unit and says which one.
+  const biomethaneTrend = data ? data.periodTrend.filter((p) => p.productType === "BIOMETHANE") : [];
+  const trendUnit = biomethaneTrend.length > 0 ? biomethaneTrend[biomethaneTrend.length - 1].unit : null;
+  const trendPoints = biomethaneTrend.filter((p) => p.unit === trendUnit);
+
   return (
     <div className="flex flex-col gap-8 pb-12 min-w-0 w-full">
       <PageHeader title="Dashboard" subtitle="Pooled stock, open periods, and recent activity across the company." />
@@ -42,9 +66,9 @@ export function DashboardPage() {
             <StatCard label="Certified Sites" value={data.siteCount} />
             <StatCard label="Open periods" value={data.openPeriodCount} />
             <StatCard label="Active pools" value={data.poolCount} />
-            <StatCard label="Biomethane balance" value={fmt(data.biomethaneBalance)} />
+            <StatCard label="Biomethane balance" value={<BalanceValue balances={balancesFor("BIOMETHANE")} />} />
             <div className="col-span-2 lg:col-span-1">
-              <StatCard label="Bio-LNG balance" value={fmt(data.biolngBalance)} />
+              <StatCard label="Bio-LNG balance" value={<BalanceValue balances={balancesFor("BIOLNG")} />} />
             </div>
           </div>
 
@@ -54,12 +78,12 @@ export function DashboardPage() {
               <div>
                 <h2 className="mb-2">Balance history</h2>
                 <div className="text-[var(--text-dim)] text-sm">
-                  Closing biomethane balance, last {data.periodTrend.length} periods.
+                  Closing biomethane balance{trendUnit ? ` in ${UNIT_LABELS[trendUnit]}` : ""}, last {trendPoints.length} period{trendPoints.length === 1 ? "" : "s"}.
                 </div>
               </div>
             </div>
             <div className="flex-1 flex flex-col justify-end min-h-[240px] w-full">
-              <TrendChart points={data.periodTrend} />
+              <TrendChart points={trendPoints} />
             </div>
           </div>
 
@@ -84,7 +108,7 @@ export function DashboardPage() {
                       </div>
                       
                       <div className="text-[22px] font-bold font-display text-[var(--heading)] leading-none mt-2" style={{ color: neg ? "var(--error)" : "var(--heading)" }}>
-                        {fmt(b.availableVolume)}
+                        {fmt(b.availableVolume)} <span className="text-sm font-medium text-[var(--text-dim)]">{UNIT_LABELS[b.unit]}</span>
                       </div>
                       <div className="text-[11px] text-[var(--text-faint)] font-bold uppercase tracking-wider mb-2">
                         In / out: — / —
@@ -134,7 +158,9 @@ export function DashboardPage() {
                       </div>
                       <div>
                         <div className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-1">Booked closing</div>
-                        <div className="font-bold font-display text-[var(--heading)]">{fmt(data.biomethaneBalance)}</div>
+                        <div className="font-bold font-display text-[var(--heading)]">
+                          <BalanceValue balances={balancesFor("BIOMETHANE")} />
+                        </div>
                       </div>
                       <div>
                         <div className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-1">Transactions</div>

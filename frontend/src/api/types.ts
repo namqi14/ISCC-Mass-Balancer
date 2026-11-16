@@ -3,7 +3,7 @@ export type CertScheme = "ISCC_EU" | "ISCC_PLUS";
 export type OperatorType = "TRADER" | "PROCESSING_UNIT";
 export type ProductType = "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG";
 /** NM3 = normal cubic metre (0 C, 1 atm), the unit the client quotes gas conversion rates in. */
-export type Unit = "M3" | "NM3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH";
+export type Unit = "M3" | "NM3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH" | "MMBTU";
 export type TransactionType = "INBOUND" | "OUTBOUND" | "CONVERSION_IN" | "CONVERSION_OUT";
 export type PeriodStatus = "OPEN" | "CLOSED";
 export type AlertSeverity = "INFO" | "WARNING" | "CRITICAL";
@@ -129,6 +129,9 @@ export interface Batch {
   materialCategory: string;
   wasteStatus: "PRE_CONSUMER" | "POST_CONSUMER" | "MIXED" | "UNSPECIFIED" | null;
   unit: Unit;
+  /** Set when this stock is tracked as its own lot (e.g. "EU-IN-20261002-GMES-BM-2026-10");
+   * null for an ordinary pooled batch. */
+  lotRef?: string | null;
   productType: ProductType;
   isMerged: boolean;
   createdAt: string;
@@ -204,6 +207,11 @@ export interface Transaction {
   counterpartyName: string | null;
   counterpartyCertNumber: string | null;
   physicalDocumentId: number | null;
+  /** Receipt ref (inbound) or sales/delivery ref (outbound). */
+  reference?: string | null;
+  sdPosRef?: string | null;
+  location?: string | null;
+  certifiedClaim?: boolean | null;
   createdAt: string;
   batch?: Batch;
   site?: Site;
@@ -217,8 +225,44 @@ export interface ConversionEvent {
   periodId: number;
   conversionFactorCf: string;
   conversionDate: string;
+  /** Tolling: the processing unit that did the conversion (the booking site is `site`). */
+  puSiteId?: number | null;
+  puSite?: { id: number; name: string } | null;
+  reference?: string | null;
+  instructionRef?: string | null;
+  processingGhg?: string | null;
+  lngLotId?: number | null;
+  lngQuantity?: string | null;
+  lngLot?: { id: number; lotRef: string; unit: Unit } | null;
   site?: Site;
   lines?: { id: number; role: "INPUT" | "OUTPUT"; transaction: Transaction }[];
+}
+
+/** Shared physical (uncertified) LNG ledger -- one received lot with what was
+ * deducted by liquefactions, sent out, and what remains. */
+export interface LngMovement {
+  id: number;
+  type: "DEDUCTION" | "OUTGOING";
+  quantity: string;
+  movementDate: string;
+  certScheme: CertScheme | null;
+  reference: string | null;
+  customer: string | null;
+}
+export interface LngLot {
+  id: number;
+  siteId: number;
+  lotRef: string;
+  receiptDate: string;
+  quantity: string;
+  unit: Unit;
+  supplierName: string | null;
+  reference: string | null;
+  site?: { id: number; name: string };
+  movements: LngMovement[];
+  deducted: string;
+  outgoing: string;
+  remaining: string;
 }
 
 export interface SchemeTransfer {
@@ -262,18 +306,28 @@ export interface PeriodTrendPoint {
   periodId: number;
   siteName: string;
   productType: string;
+  /** The unit this period's balance is in (null if nothing was booked against it). */
+  unit: Unit | null;
   endDate: string;
   totalAvailableB: string;
   outgoingC: string;
   closingBalance: string;
 }
 
+/** Available stock of one product in one unit, summed over its pools. Never added
+ * across units: a volume is only meaningful in its own unit. */
+export interface DashboardBalance {
+  productType: ProductType;
+  unit: Unit;
+  volume: string;
+  poolCount: number;
+}
+
 export interface DashboardData {
   siteCount: number;
   openPeriodCount: number;
   poolCount: number;
-  biomethaneBalance: string;
-  biolngBalance: string;
+  balances: DashboardBalance[];
   recentAudit: AuditLogEntry[];
   /** Real closing balances from the last 12 closed periods (oldest -> newest),
    * as persisted by the engine at close time. Not synthetic. */

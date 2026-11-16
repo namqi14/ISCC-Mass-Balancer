@@ -69,6 +69,8 @@ export function TransactionLogPage() {
       const q = filterSearch.toLowerCase();
       const match = 
         t.counterpartyName?.toLowerCase().includes(q) ||
+        t.reference?.toLowerCase().includes(q) ||
+        t.batch?.lotRef?.toLowerCase().includes(q) ||
         t.physicalDocument?.documentNumber?.toLowerCase().includes(q) ||
         t.site?.name?.toLowerCase().includes(q) ||
         t.batch?.rawMaterial?.toLowerCase().includes(q);
@@ -152,6 +154,7 @@ export function TransactionLogPage() {
                   <SortHeader label="Volume" sKey="volume" num />
                   <SortHeader label="Counterparty" sKey="counterparty" />
                   <SortHeader label="Document" sKey="document" />
+                  <th>Reference / lot</th>
                   <SortHeader label="Recorded by" sKey="recordedBy" />
                 </tr>
               </thead>
@@ -169,6 +172,7 @@ export function TransactionLogPage() {
                     <td className="num">{fmt(t.volume)}</td>
                     <td>{t.counterpartyName || "—"}</td>
                     <td>{t.physicalDocument ? t.physicalDocument.documentNumber : "—"}</td>
+                    <td>{[t.reference, t.batch?.lotRef].filter(Boolean).join(" · ") || "—"}</td>
                     <td>{t.createdBy?.name || "—"}</td>
                   </tr>
                 ))}

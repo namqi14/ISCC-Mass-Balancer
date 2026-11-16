@@ -20,7 +20,7 @@
 
 export type ConversionProduct = "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG";
 export type ConversionStage = "P1" | "P2" | "P3" | "P4";
-export type ConversionUnit = "M3" | "NM3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH";
+export type ConversionUnit = "M3" | "NM3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH" | "MMBTU";
 
 /** One allowed source unit for a stage, and what the step then produces. */
 export interface UnitRule {
@@ -81,6 +81,13 @@ export const CONVERSION_STAGES: StageDef[] = [
         perUnitText: "kg Bio-LNG per Nm3 biomethane",
         typical: { min: 0.7, max: 0.72, basis: "Density of gaseous CH4 is about 0.717 kg/Nm3." },
       },
+      {
+        // Energy basis, as the client's PEGT workbook books liquefaction.
+        sourceUnit: "MMBTU",
+        targetUnit: "MMBTU",
+        perUnitText: "MMBtu Bio-LNG per MMBtu biomethane",
+        typical: { min: 1, max: 1, basis: "The client's PEGT workbook uses a factor of 1 on an energy (MMBtu) basis." },
+      },
     ],
   },
   {
@@ -100,6 +107,13 @@ export const CONVERSION_STAGES: StageDef[] = [
         targetUnit: "NM3",
         perUnitText: "Nm3 biomethane per m3 Bio-LNG",
         typical: { min: 590, max: 600, basis: "Liquid density about 425-430 kg/m3 at -162 C." },
+      },
+      {
+        // Energy basis, as the client's PEGT workbook books regassing.
+        sourceUnit: "MMBTU",
+        targetUnit: "MMBTU",
+        perUnitText: "MMBtu biomethane per MMBtu Bio-LNG",
+        typical: { min: 1, max: 1, basis: "The client's PEGT workbook uses a factor of 1 on an energy (MMBtu) basis." },
       },
     ],
   },
@@ -158,6 +172,7 @@ export const UNIT_WORDS: Record<ConversionUnit, string> = {
   M3_15C: "m3 (15 C)",
   J: "J",
   KWH: "kWh",
+  MMBTU: "MMBtu",
 };
 
 /** Site.operatorType is derived from the stage flags: any stage on means PROCESSING_UNIT. */

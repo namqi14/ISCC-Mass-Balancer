@@ -4,7 +4,14 @@ import { UserRole, CertScheme, ProductType, GhgValueType, WasteStatus, Unit } fr
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { asyncHandler } from "../middleware/errorHandler";
-import { findOrCreateBatch, recordTransaction, READ_COMMITTED } from "../lib/massBalanceEngine";
+import {
+  assertLotRefFree,
+  assertReceiptRefFree,
+  findOrCreateBatch,
+  lotRefFor,
+  recordTransaction,
+  READ_COMMITTED,
+} from "../lib/massBalanceEngine";
 import { AppError } from "../lib/errors";
 import { withRetry } from "../lib/retry";
 import { decryptField, encryptField } from "../lib/fieldEncryption";
@@ -68,6 +75,12 @@ const baseFields = {
   transactionDate: z.coerce.date(),
   counterpartyName: z.string().optional(),
   counterpartyCertNumber: z.string().optional(),
+  // The client workbook's own references. Receipt ref (INBOUND) / sales or
+  // delivery ref (OUTBOUND); supplier's / outgoing SD or PoS ref; storage or
+  // dispatch location. An INBOUND `reference` also makes the receipt its own lot.
+  reference: z.string().trim().min(1).max(200).optional(),
+  sdPosRef: z.string().trim().max(200).optional(),
+  location: z.string().trim().max(200).optional(),
 };
 
 // Scheme-dependent controlled vocabulary for Batch.materialCategory (client
@@ -116,6 +129,7 @@ const outboundSchema = z.object({
   ...baseFields,
   transactionType: z.literal("OUTBOUND"),
   batchId: z.number().int(),
+  certifiedClaim: z.boolean().optional(),
 });
 
 const createTransactionSchema = z
@@ -154,6 +168,15 @@ transactionsRouter.post(
       let physicalDocumentId: number | undefined;
 
       if (data.transactionType === "INBOUND") {
+        // A receipt reference turns the receipt into its own lot
+        // "<scheme>-IN-<yyyymmdd>-<ref>" (client workbook); without one it pools
+        // exactly as before.
+        let lotRef: string | null = null;
+        if (data.reference) {
+          await assertReceiptRefFree(tx, { companyId, siteId: data.siteId, certScheme: data.certScheme, reference: data.reference });
+          lotRef = lotRefFor(data.certScheme, "IN", data.reference, data.transactionDate);
+          await assertLotRefFree(tx, { companyId, siteId: data.siteId, certScheme: data.certScheme, lotRef, what: "receipt reference" });
+        }
         const batch = await findOrCreateBatch(tx, {
           companyId,
           siteId: data.siteId,
@@ -163,6 +186,8 @@ transactionsRouter.post(
           ghgValue: data.ghgValue,
           productType: data.productType,
           unit: data.unit,
+          lotRef,
+          mustBeNew: !!lotRef,
           ghgValueType: data.ghgValueType,
           materialCategory: data.materialCategory,
           wasteStatus: data.wasteStatus ?? null,
@@ -204,6 +229,10 @@ transactionsRouter.post(
         counterpartyName: data.counterpartyName,
         counterpartyCertNumber: data.counterpartyCertNumber,
         physicalDocumentId,
+        reference: data.reference,
+        sdPosRef: data.sdPosRef,
+        location: data.location,
+        certifiedClaim: data.transactionType === "OUTBOUND" ? data.certifiedClaim ?? true : undefined,
         actor,
       });
     }, READ_COMMITTED));

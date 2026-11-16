@@ -219,4 +219,5 @@ export const UNIT_LABELS: Record<Unit, string> = {
   M3_15C: "m³ (15°C)",
   J: "J",
   KWH: "kWh",
+  MMBTU: "MMBtu",
 };

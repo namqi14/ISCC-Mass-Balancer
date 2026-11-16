@@ -26,6 +26,8 @@ conversionsRouter.get(
       where: { companyId: req.user!.companyId, siteId: siteId ?? siteIdFilter(accessible) },
       include: {
         site: true,
+        puSite: { select: { id: true, name: true } },
+        lngLot: { select: { id: true, lotRef: true, unit: true } },
         lines: { include: { transaction: { include: { batch: true } } } },
       },
       orderBy: { conversionDate: "desc" },
@@ -184,6 +186,13 @@ const createSchema = z.object({
   conversionFactorCf: z.coerce.number().positive(),
   conversionDate: z.coerce.date(),
   targetProductType: z.nativeEnum(ProductType),
+  // Tolling (client workbook "PU Conversion" tab) -- all optional. See
+  // createConversionEvent for what each one does.
+  puSiteId: z.number().int().optional(),
+  reference: z.string().trim().min(1).max(200).optional(),
+  instructionRef: z.string().trim().max(200).optional(),
+  processingGhg: z.coerce.number().min(0).optional(),
+  lngLotId: z.number().int().optional(),
 });
 
 // Only PROCESSING_UNIT sites may run conversions -- enforced inside

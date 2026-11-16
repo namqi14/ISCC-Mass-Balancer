@@ -13,7 +13,7 @@
  * period to CLOSED, or persists nothing at all.
  */
 
-import { Prisma, TransactionType, PeriodStatus, ConversionRole } from "@prisma/client";
+import { Prisma, TransactionType, PeriodStatus, ConversionRole, Unit, LngMovementType, CertScheme } from "@prisma/client";
 import { prisma } from "./prisma";
 import {
   D,
@@ -119,7 +119,15 @@ export async function findOrCreateBatch(
     countryOfOrigin: string;
     ghgValue: Prisma.Decimal.Value;
     productType: "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG";
-    unit: "M3" | "NM3" | "METRIC_TONS" | "KG" | "M3_15C" | "J" | "KWH";
+    unit: Unit;
+    // Set to track this stock as its own lot (client workbook: one lot per
+    // receipt / conversion output). Part of the pooling key; null/omitted =
+    // the ordinary pooled batch every earlier caller gets.
+    lotRef?: string | null;
+    // For a lot that must be brand new (a receipt / conversion carrying its own
+    // reference): never reuse an existing batch, and treat losing a creation race
+    // as a duplicate reference instead of silently booking into the winner's lot.
+    mustBeNew?: boolean;
     // Only used to populate a brand-new pool -- see below, these three are
     // deliberately NOT part of the lookup/pooling key (whereClause), so
     // reusing an existing pool never rewrites them from a later delivery.
@@ -148,10 +156,23 @@ export async function findOrCreateBatch(
     isMerged: false,
     ghgValue: ghg,
     unit: params.unit,
+    // The index uses COALESCE(lotRef,'') so NULL means "no lot"; Prisma's
+    // `lotRef: null` matches exactly the NULL rows, which is the same set.
+    lotRef: params.lotRef ?? null,
   };
 
+  const duplicate = () =>
+    new AppError(
+      `Duplicate reference: lot ${params.lotRef} already exists at this site. Use a different reference.`,
+      409,
+      "DUPLICATE_REFERENCE"
+    );
+
   const existing = await tx.batch.findFirst({ where: whereClause });
-  if (existing) return existing;
+  if (existing) {
+    if (params.mustBeNew) throw duplicate();
+    return existing;
+  }
 
   try {
     return await tx.batch.create({
@@ -164,6 +185,7 @@ export async function findOrCreateBatch(
         ghgValue: ghg,
         productType: params.productType,
         unit: params.unit,
+        lotRef: params.lotRef ?? null,
         ghgValueType: params.ghgValueType,
         materialCategory: params.materialCategory,
         wasteStatus: params.wasteStatus ?? null,
@@ -172,6 +194,7 @@ export async function findOrCreateBatch(
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      if (params.mustBeNew) throw duplicate();
       const wonByOther = await tx.batch.findFirst({ where: whereClause });
       if (wonByOther) return wonByOther;
     }
@@ -380,6 +403,191 @@ export async function openNewPeriod(
 }
 
 // ---------------------------------------------------------------------------
+// Lots (client workbook: every receipt / conversion output is its own lot)
+// ---------------------------------------------------------------------------
+
+/** "EU" / "PLUS" -- the scheme prefix the client's lot ids use. */
+export function schemeShort(certScheme: CertScheme): "EU" | "PLUS" {
+  return certScheme === CertScheme.ISCC_EU ? "EU" : "PLUS";
+}
+
+/**
+ * The workbook's lot id: receipts are "<scheme>-IN-<yyyymmdd>-<receipt ref>"
+ * and conversion outputs "<scheme>-CV-<conversion ref>".
+ */
+export function lotRefFor(certScheme: CertScheme, kind: "IN" | "CV", reference: string, date?: Date): string {
+  const ref = reference.trim();
+  if (kind === "IN") {
+    if (!date) throw new AppError("A receipt date is needed to build the lot id.");
+    return `${schemeShort(certScheme)}-IN-${date.toISOString().slice(0, 10).replace(/-/g, "")}-${ref}`;
+  }
+  return `${schemeShort(certScheme)}-CV-${ref}`;
+}
+
+/** Rejects a lot id that already exists at this site/scheme (workbook: "DUPLICATE ... REF"). */
+export async function assertLotRefFree(
+  tx: Tx,
+  params: { companyId: number; siteId: number; certScheme: CertScheme; lotRef: string; what: string }
+): Promise<void> {
+  const clash = await tx.batch.findFirst({
+    where: { companyId: params.companyId, siteId: params.siteId, certScheme: params.certScheme, lotRef: params.lotRef },
+    select: { id: true },
+  });
+  if (clash) {
+    throw new AppError(
+      `Duplicate ${params.what}: lot ${params.lotRef} already exists at this site. Use a different reference.`,
+      409,
+      "DUPLICATE_REFERENCE"
+    );
+  }
+}
+
+/** The workbook flags the same receipt reference used twice for one scheme, even on different dates. */
+export async function assertReceiptRefFree(
+  tx: Tx,
+  params: { companyId: number; siteId: number; certScheme: CertScheme; reference: string }
+): Promise<void> {
+  const clash = await tx.transaction.findFirst({
+    where: {
+      companyId: params.companyId,
+      siteId: params.siteId,
+      transactionType: TransactionType.INBOUND,
+      reference: params.reference.trim(),
+      batch: { certScheme: params.certScheme },
+    },
+    select: { id: true },
+  });
+  if (clash) {
+    throw new AppError(
+      `Duplicate receipt reference: "${params.reference.trim()}" was already used for a ${schemeShort(params.certScheme)} receipt at this site.`,
+      409,
+      "DUPLICATE_REFERENCE"
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared physical (uncertified) LNG ledger
+// ---------------------------------------------------------------------------
+
+/** Remaining balance of an LNG lot: received quantity minus every deduction and outgoing. */
+export async function getLngLotRemaining(tx: Tx, companyId: number, lngLotId: number): Promise<Prisma.Decimal> {
+  const lot = await tx.lngLot.findFirst({ where: { id: lngLotId, companyId } });
+  if (!lot) throw new AppError("Physical LNG lot not found.", 404);
+  const used = await tx.lngMovement.aggregate({ where: { companyId, lngLotId }, _sum: { quantity: true } });
+  return D(lot.quantity).minus(used._sum.quantity ?? 0);
+}
+
+export async function createLngLot(
+  tx: Tx,
+  params: {
+    companyId: number;
+    siteId: number;
+    receiptDate: Date;
+    quantity: Prisma.Decimal.Value;
+    unit: Unit;
+    reference: string;
+    supplierName?: string | null;
+    actor: Actor;
+  }
+) {
+  const quantity = D(params.quantity);
+  if (quantity.lessThanOrEqualTo(0)) throw new AppError("Quantity must be greater than zero.");
+  const site = await tx.site.findFirst({ where: { id: params.siteId, companyId: params.companyId } });
+  if (!site) throw new AppError("Site not found.", 404);
+  const reference = params.reference.trim();
+  const lotRef = `LNG-IN-${params.receiptDate.toISOString().slice(0, 10).replace(/-/g, "")}-${reference}`;
+  const clash = await tx.lngLot.findFirst({
+    where: { companyId: params.companyId, siteId: params.siteId, reference },
+    select: { id: true },
+  });
+  if (clash) {
+    throw new AppError(`Duplicate receipt reference: "${reference}" was already used for an LNG receipt at this site.`, 409, "DUPLICATE_REFERENCE");
+  }
+  let lot;
+  try {
+    lot = await tx.lngLot.create({
+      data: {
+        companyId: params.companyId,
+        siteId: params.siteId,
+        lotRef,
+        receiptDate: params.receiptDate,
+        quantity,
+        unit: params.unit,
+        reference,
+        supplierName: encryptField(params.supplierName?.trim() || null),
+        createdById: params.actor.id,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw new AppError(`Duplicate LNG lot: ${lotRef} already exists at this site.`, 409, "DUPLICATE_REFERENCE");
+    }
+    throw err;
+  }
+  await logAudit(tx, {
+    companyId: params.companyId,
+    entityType: "LngLot",
+    entityId: lot.id,
+    action: "CREATE",
+    actor: params.actor,
+    afterValue: `lot=${lotRef}, quantity=${quantity} ${UNIT_WORDS[params.unit]}`,
+  });
+  lot.supplierName = params.supplierName?.trim() || null;
+  return lot;
+}
+
+/** Conventional LNG sold or delivered out of the shared physical pool. */
+export async function recordLngOutgoing(
+  tx: Tx,
+  params: {
+    companyId: number;
+    siteId: number;
+    lngLotId: number;
+    quantity: Prisma.Decimal.Value;
+    movementDate: Date;
+    reference?: string | null;
+    customer?: string | null;
+    actor: Actor;
+  }
+) {
+  const quantity = D(params.quantity);
+  if (quantity.lessThanOrEqualTo(0)) throw new AppError("Quantity must be greater than zero.");
+  const lot = await tx.lngLot.findFirst({ where: { id: params.lngLotId, companyId: params.companyId, siteId: params.siteId } });
+  if (!lot) throw new AppError("Physical LNG lot not found at this site.", 404);
+  await tx.$queryRaw`SELECT id FROM lng_lots WHERE "companyId" = ${params.companyId} AND id = ${lot.id} FOR UPDATE`;
+  const remaining = await getLngLotRemaining(tx, params.companyId, lot.id);
+  if (quantity.greaterThan(remaining)) {
+    throw new InsufficientStockError(
+      `Outgoing LNG (${quantity}) exceeds the remaining balance (${remaining}) of LNG lot ${lot.lotRef}.`
+    );
+  }
+  const movement = await tx.lngMovement.create({
+    data: {
+      companyId: params.companyId,
+      siteId: params.siteId,
+      lngLotId: lot.id,
+      type: LngMovementType.OUTGOING,
+      quantity,
+      movementDate: params.movementDate,
+      reference: params.reference?.trim() || null,
+      customer: encryptField(params.customer?.trim() || null),
+      createdById: params.actor.id,
+    },
+  });
+  await logAudit(tx, {
+    companyId: params.companyId,
+    entityType: "LngMovement",
+    entityId: movement.id,
+    action: "CREATE",
+    actor: params.actor,
+    afterValue: `OUTGOING ${quantity} from ${lot.lotRef}`,
+  });
+  movement.customer = params.customer?.trim() || null;
+  return movement;
+}
+
+// ---------------------------------------------------------------------------
 // Rule 3 (+ Rule 5 real-time check): transactions
 // ---------------------------------------------------------------------------
 
@@ -396,6 +604,11 @@ export async function recordTransaction(
     counterpartyName?: string | null;
     counterpartyCertNumber?: string | null;
     physicalDocumentId?: number | null;
+    // The client workbook's own references (see Transaction in schema.prisma).
+    reference?: string | null;
+    sdPosRef?: string | null;
+    location?: string | null;
+    certifiedClaim?: boolean | null;
     actor: Actor;
   }
 ) {
@@ -442,6 +655,10 @@ export async function recordTransaction(
       counterpartyName: encryptField(params.counterpartyName ?? null),
       counterpartyCertNumber: encryptField(params.counterpartyCertNumber ?? null),
       physicalDocumentId: params.physicalDocumentId ?? null,
+      reference: params.reference ?? null,
+      sdPosRef: params.sdPosRef ?? null,
+      location: params.location ?? null,
+      certifiedClaim: params.certifiedClaim ?? null,
       createdById: params.actor.id,
     },
   });
@@ -609,11 +826,34 @@ export async function createConversionEvent(
     conversionFactorCf: Prisma.Decimal.Value;
     conversionDate: Date;
     targetProductType: "POME" | "BIOGAS" | "BIOMETHANE" | "BIOLNG";
+    // Tolling (client workbook "PU Conversion" tab) -- all optional; without
+    // them this behaves exactly as before. `siteId` stays the booking (trader)
+    // site; `puSiteId` is the processing unit that does the conversion, whose
+    // stage set and conversion rates apply.
+    puSiteId?: number | null;
+    // Conversion ref: when given, the output becomes its own lot
+    // "<scheme>-CV-<reference>" instead of pooling.
+    reference?: string | null;
+    instructionRef?: string | null;
+    // Added to the source GHG to give the output GHG (gCO2e/MJ).
+    processingGhg?: Prisma.Decimal.Value | null;
+    // Liquefaction only: conventional LNG lot deducted from the shared physical
+    // ledger, by the output quantity.
+    lngLotId?: number | null;
     actor: Actor;
   }
 ) {
   const site = await tx.site.findFirst({ where: { id: params.siteId, companyId: params.companyId } });
   if (!site) throw new AppError("Site not found.", 404);
+
+  // The site whose conversion stages / rates apply: the PU when tolling.
+  let stageSite = site;
+  if (params.puSiteId && params.puSiteId !== params.siteId) {
+    const pu = await tx.site.findFirst({ where: { id: params.puSiteId, companyId: params.companyId } });
+    if (!pu) throw new AppError("Processing-unit site not found.", 404);
+    stageSite = pu;
+  }
+  const tolling = stageSite.id !== site.id;
 
   const period = await tx.period.findFirst({ where: { id: params.periodId, companyId: params.companyId } });
   if (!period) throw new AppError("Period not found.", 404);
@@ -623,6 +863,9 @@ export async function createConversionEvent(
 
   const sourceBatch = await tx.batch.findFirst({ where: { id: params.sourceBatchId, companyId: params.companyId } });
   if (!sourceBatch) throw new AppError("Source batch not found.", 404);
+  if (tolling && sourceBatch.siteId !== site.id) {
+    throw new AppError("For a tolling conversion the source lot must belong to the booking (trader) site.");
+  }
   if (sourceBatch.productType === params.targetProductType) {
     throw new AppError("Target product type must differ from the source pool's product type.");
   }
@@ -639,10 +882,10 @@ export async function createConversionEvent(
         `${CONVERSION_STAGES.map((s) => s.label).join(", ")}. Book each step as its own conversion.`
     );
   }
-  if (!siteHasStage(site, stage.stage)) {
-    const enabled = siteStages(site);
+  if (!siteHasStage(stageSite, stage.stage)) {
+    const enabled = siteStages(stageSite);
     throw new ConversionNotAllowedError(
-      `Site "${site.name}" is not set up for ${stage.label}. ` +
+      `Site "${stageSite.name}" is not set up for ${stage.label}. ` +
         (enabled.length > 0
           ? `It is set up for: ${enabled.join(", ")}. `
           : `It has no conversion stages enabled (it is a trader site). `) +
@@ -677,6 +920,35 @@ export async function createConversionEvent(
 
   const resultVolume = sourceVolume.times(cf);
 
+  // Output GHG = source GHG + the processing GHG added at the PU (client
+  // workbook: 32 + 13.48 = 45.48). Zero/omitted leaves the GHG unchanged.
+  const processingGhg = params.processingGhg === null || params.processingGhg === undefined ? null : D(params.processingGhg);
+  if (processingGhg && processingGhg.lessThan(0)) throw new AppError("Processing GHG cannot be negative.");
+  const outputGhg = D(sourceBatch.ghgValue).plus(processingGhg ?? 0);
+
+  // Conversion reference -> the output becomes its own lot, like a receipt.
+  const reference = params.reference?.trim() || null;
+  const outputLotRef = reference ? lotRefFor(sourceBatch.certScheme, "CV", reference) : null;
+  if (outputLotRef) {
+    await assertLotRefFree(tx, { companyId: params.companyId, siteId: params.siteId, certScheme: sourceBatch.certScheme, lotRef: outputLotRef, what: "conversion reference" });
+  }
+
+  // Conventional LNG deducted from the shared physical ledger (liquefaction only).
+  let lngLot: { id: number; lotRef: string; unit: Unit } | null = null;
+  if (params.lngLotId) {
+    if (stage.stage !== "P3") {
+      throw new AppError("A physical LNG lot can only be attached to a liquefaction (Biomethane to Bio-LNG, P3).");
+    }
+    const found = await tx.lngLot.findFirst({ where: { id: params.lngLotId, companyId: params.companyId } });
+    if (!found) throw new AppError("Physical LNG lot not found.", 404);
+    if (found.unit !== unitRule.targetUnit) {
+      throw new AppError(
+        `The LNG lot is in ${UNIT_WORDS[found.unit]} but this liquefaction produces ${UNIT_WORDS[unitRule.targetUnit]}; they must match.`
+      );
+    }
+    lngLot = { id: found.id, lotRef: found.lotRef, unit: found.unit };
+  }
+
   // The rate the site has configured for this stage/unit on the conversion
   // date (rates are dated; see ConversionRate). Only used to WARN when the
   // factor is outside the user's own min/max -- never to reject, since a
@@ -684,7 +956,7 @@ export async function createConversionEvent(
   const inForceRate = await tx.conversionRate.findFirst({
     where: {
       companyId: params.companyId,
-      siteId: params.siteId,
+      siteId: stageSite.id,
       stage: stage.stage,
       sourceUnit: sourceBatch.unit,
       effectiveFrom: { lte: params.conversionDate },
@@ -701,7 +973,9 @@ export async function createConversionEvent(
     certScheme: sourceBatch.certScheme,
     rawMaterial: sourceBatch.rawMaterial,
     countryOfOrigin: sourceBatch.countryOfOrigin,
-    ghgValue: sourceBatch.ghgValue,
+    ghgValue: outputGhg,
+    lotRef: outputLotRef,
+    mustBeNew: !!outputLotRef,
     productType: params.targetProductType,
     // A conversion's output pool carries the same sustainability
     // documentation as its input -- it's the same certified material, just
@@ -721,9 +995,42 @@ export async function createConversionEvent(
       periodId: params.periodId,
       conversionFactorCf: cf,
       conversionDate: params.conversionDate,
+      puSiteId: tolling ? stageSite.id : null,
+      reference,
+      instructionRef: params.instructionRef?.trim() || null,
+      processingGhg,
+      lngLotId: lngLot?.id ?? null,
+      lngQuantity: lngLot ? resultVolume : null,
       createdById: params.actor.id,
     },
   });
+
+  // Deduct the conventional LNG that goes with the credit (row-locked so two
+  // liquefactions cannot both spend the same last stock).
+  let lngMovement = null;
+  if (lngLot) {
+    await tx.$queryRaw`SELECT id FROM lng_lots WHERE "companyId" = ${params.companyId} AND id = ${lngLot.id} FOR UPDATE`;
+    const remaining = await getLngLotRemaining(tx, params.companyId, lngLot.id);
+    if (resultVolume.greaterThan(remaining)) {
+      throw new InsufficientStockError(
+        `Physical LNG needed (${resultVolume}) exceeds the remaining balance (${remaining}) of LNG lot ${lngLot.lotRef}.`
+      );
+    }
+    lngMovement = await tx.lngMovement.create({
+      data: {
+        companyId: params.companyId,
+        siteId: params.siteId,
+        lngLotId: lngLot.id,
+        type: LngMovementType.DEDUCTION,
+        quantity: resultVolume,
+        movementDate: params.conversionDate,
+        certScheme: sourceBatch.certScheme,
+        conversionEventId: event.id,
+        reference,
+        createdById: params.actor.id,
+      },
+    });
+  }
 
   const outTx = await tx.transaction.create({
     data: {
@@ -765,11 +1072,16 @@ export async function createConversionEvent(
     actor: params.actor,
     afterValue:
       `${sourceBatch.productType} ${sourceVolume} ${UNIT_WORDS[sourceBatch.unit]} -> ${params.targetProductType} ` +
-      `${resultVolume} ${UNIT_WORDS[unitRule.targetUnit]} (${stage.stage}, CF=${cf})`,
+      `${resultVolume} ${UNIT_WORDS[unitRule.targetUnit]} (${stage.stage}, CF=${cf}` +
+      (tolling ? `, processed at ${stageSite.name}` : "") +
+      (processingGhg ? `, processing GHG +${processingGhg} => output GHG ${outputGhg}` : "") +
+      (lngLot ? `, LNG lot ${lngLot.lotRef} -${resultVolume}` : "") +
+      (outputLotRef ? `, output lot ${outputLotRef}` : "") +
+      `)`,
     notes: warnings.length > 0 ? warnings.join(" ") : null,
   });
 
-  return { event, sourceTransaction: outTx, targetTransaction: inTx, targetBatch, resultVolume, warnings };
+  return { event, sourceTransaction: outTx, targetTransaction: inTx, targetBatch, resultVolume, warnings, lngMovement };
 }
 
 // ---------------------------------------------------------------------------
@@ -836,6 +1148,8 @@ export async function createSchemeTransfer(
     rawMaterial: sourceBatch.rawMaterial,
     countryOfOrigin: sourceBatch.countryOfOrigin,
     ghgValue: sourceBatch.ghgValue,
+    // A transferred lot keeps its lot id so it stays traceable to the original receipt.
+    lotRef: sourceBatch.lotRef,
     productType: sourceBatch.productType,
     // Same certified material, just moved to a PLUS-side pool -- carries
     // the source pool's own sustainability documentation forward.
@@ -1020,6 +1334,8 @@ export async function createPlusToPlusTransfer(
     rawMaterial: sourceBatch.rawMaterial,
     countryOfOrigin: sourceBatch.countryOfOrigin,
     ghgValue: sourceBatch.ghgValue,
+    // A transferred lot keeps its lot id so it stays traceable to the original receipt.
+    lotRef: sourceBatch.lotRef,
     productType: sourceBatch.productType,
     unit: sourceBatch.unit,
     ghgValueType: sourceBatch.ghgValueType,
