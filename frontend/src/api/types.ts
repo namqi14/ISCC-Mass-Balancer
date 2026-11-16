@@ -68,6 +68,19 @@ export interface Company {
   createdAt: string;
 }
 
+/** One row of GET /companies (SUPER_ADMIN only): account-management fields
+ * for a client company, never its operational data. */
+export interface ClientCompany {
+  id: number;
+  name: string;
+  registrationNumber: string;
+  isActive: boolean;
+  maxSites: number | null;
+  createdAt: string;
+  siteCount: number;
+  userCount: number;
+}
+
 export interface Period {
   id: number;
   companyId: number;

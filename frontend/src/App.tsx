@@ -1,7 +1,8 @@
 import React from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
-import { ProtectedRoute, AdminOnly } from "./components/ProtectedRoute";
+import { ProtectedRoute, AdminOnly, SuperAdminOnly } from "./components/ProtectedRoute";
+import { ClientsPage } from "./pages/ClientsPage";
 import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -50,6 +51,14 @@ export default function App() {
             />
             <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/account" element={<AccountPage />} />
+            <Route
+              path="/clients"
+              element={
+                <SuperAdminOnly>
+                  <ClientsPage />
+                </SuperAdminOnly>
+              }
+            />
             <Route
               path="/users"
               element={

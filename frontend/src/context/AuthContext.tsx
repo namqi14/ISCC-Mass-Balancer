@@ -15,6 +15,8 @@ interface AuthContextValue {
   canWrite: boolean;
   /** SUPER_ADMIN or COMPANY_ADMIN -- gates user management and period close. */
   isCompanyAdmin: boolean;
+  /** SUPER_ADMIN only -- gates the Clients page (onboarding client companies). */
+  isSuperAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -68,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     canWrite: !!user,
     isCompanyAdmin: user?.role === "SUPER_ADMIN" || user?.role === "COMPANY_ADMIN",
+    isSuperAdmin: user?.role === "SUPER_ADMIN",
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

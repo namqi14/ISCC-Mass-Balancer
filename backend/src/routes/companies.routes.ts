@@ -1,4 +1,5 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import multer from "multer";
 import { supabase } from "../lib/supabase";
 import { z } from "zod";
@@ -186,6 +187,16 @@ const createCompanySchema = z.object({
   // plausible-looking one.
   registrationNumber: z.string().min(1).optional(),
   maxSites: z.number().int().min(0).optional(),
+  // Optional first COMPANY_ADMIN login, created in the same transaction so a
+  // new client is never left without a way in (or half-created if the email
+  // is already taken).
+  admin: z
+    .object({
+      name: z.string().trim().min(1),
+      email: z.string().trim().email().transform((e) => e.toLowerCase()),
+      password: z.string().min(8, "Password must be at least 8 characters."),
+    })
+    .optional(),
 });
 
 companiesRouter.post(
@@ -193,22 +204,48 @@ companiesRouter.post(
   requireRole(UserRole.SUPER_ADMIN),
   asyncHandler(async (req, res) => {
     const data = createCompanySchema.parse(req.body);
-    const company = await prisma.company.create({
-      data: {
-        name: data.name,
-        registrationNumber: data.registrationNumber ?? PLACEHOLDER_REG_NUMBER,
-        maxSites: data.maxSites,
-      },
+    if (data.admin) {
+      const taken = await prisma.user.findUnique({ where: { email: data.admin.email } });
+      if (taken) throw new AppError("That email is already used by another account.", 409, "EMAIL_TAKEN");
+    }
+    const passwordHash = data.admin ? await bcrypt.hash(data.admin.password, 10) : null;
+    const actor = { id: req.user!.userId, name: req.user!.name };
+
+    const { company, adminUser } = await prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          name: data.name,
+          registrationNumber: data.registrationNumber ?? PLACEHOLDER_REG_NUMBER,
+          maxSites: data.maxSites,
+        },
+      });
+      await logAudit(tx, {
+        companyId: company.id,
+        entityType: "Company",
+        entityId: company.id,
+        action: "CREATE",
+        actor,
+        afterValue: `name=${company.name}, maxSites=${company.maxSites ?? "unlimited"}`,
+      });
+      let adminUser: { id: number; name: string; email: string } | null = null;
+      if (data.admin && passwordHash) {
+        const u = await tx.user.create({
+          data: { companyId: company.id, name: data.admin.name, email: data.admin.email, passwordHash, role: UserRole.COMPANY_ADMIN },
+        });
+        await logAudit(tx, {
+          companyId: company.id,
+          entityType: "User",
+          entityId: u.id,
+          action: "CREATE",
+          actor,
+          afterValue: `email=${u.email}, role=${u.role}`,
+          notes: "First company admin created together with the company.",
+        });
+        adminUser = { id: u.id, name: u.name, email: u.email };
+      }
+      return { company, adminUser };
     });
-    await logAudit(prisma, {
-      companyId: company.id,
-      entityType: "Company",
-      entityId: company.id,
-      action: "CREATE",
-      actor: { id: req.user!.userId, name: req.user!.name },
-      afterValue: `name=${company.name}, maxSites=${company.maxSites ?? "unlimited"}`,
-    });
-    res.status(201).json(company);
+    res.status(201).json({ ...company, admin: adminUser });
   })
 );
 

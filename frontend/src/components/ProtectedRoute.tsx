@@ -9,6 +9,21 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+export function SuperAdminOnly({ children }: { children: React.ReactNode }) {
+  const { isSuperAdmin } = useAuth();
+  if (!isSuperAdmin) {
+    return (
+      <div className="panel">
+        <div className="empty-state">
+          <div className="title">Super admin access required</div>
+          <div>Only the platform operator can manage client companies.</div>
+        </div>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 export function AdminOnly({ children }: { children: React.ReactNode }) {
   const { isCompanyAdmin } = useAuth();
   if (!isCompanyAdmin) {

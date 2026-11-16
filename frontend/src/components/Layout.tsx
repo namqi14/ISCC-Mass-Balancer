@@ -132,7 +132,7 @@ const adminNav: NavItem[] = [
 ];
 
 export function Layout() {
-  const { user, logout, isCompanyAdmin } = useAuth();
+  const { user, logout, isCompanyAdmin, isSuperAdmin } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -208,6 +208,12 @@ export function Layout() {
             {item.label}
           </NavLink>
         ))}
+        {isSuperAdmin && (
+          <NavLink to="/clients" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+            <CompanyIcon />
+            Clients
+          </NavLink>
+        )}
         {isCompanyAdmin && (
           <NavLink to="/users" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
             <UsersIcon />
