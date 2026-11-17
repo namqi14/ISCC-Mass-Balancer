@@ -14,6 +14,8 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   companyId: number;
+  /** False until the user has accepted the current PDPA notice (the popup shows until then). */
+  pdpaAccepted: boolean;
 }
 
 export interface Site {

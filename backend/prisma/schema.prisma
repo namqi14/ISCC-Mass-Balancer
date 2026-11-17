@@ -198,14 +198,20 @@ model Company {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  companyId    Int
-  email        String   @unique @db.VarChar(200)
-  passwordHash String   @db.VarChar(200)
-  name         String   @db.VarChar(200)
-  role         UserRole @default(COMPANY_USER)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id             Int       @id @default(autoincrement())
+  companyId      Int
+  email          String    @unique @db.VarChar(200)
+  passwordHash   String    @db.VarChar(200)
+  name           String    @db.VarChar(200)
+  role           UserRole  @default(COMPANY_USER)
+  isActive       Boolean   @default(true)
+  // Personal Data Protection Act (PDPA) notice: when this user accepted it and
+  // which version of the notice (see lib/pdpa.ts). Null = has not accepted yet,
+  // so the app shows the notice on their next login; bumping PDPA_VERSION asks
+  // everyone to accept the new text.
+  pdpaAcceptedAt DateTime?
+  pdpaVersion    String?   @db.VarChar(20)
+  createdAt      DateTime  @default(now())
 
   company Company @relation(fields: [companyId], references: [id])
 

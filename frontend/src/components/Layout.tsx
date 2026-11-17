@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { PdpaModal } from "./PdpaModal";
 import alsLogo from "../assets/ALS 11.1 300 TRANS.png";
 
 // Brand mark: a dial/gauge glyph -- ported from prototype/ISCC Mass
@@ -249,6 +250,8 @@ export function Layout() {
       <main className="main-content">
         <Outlet />
       </main>
+      {/* First login (or a new notice version): nothing else is usable until accepted. */}
+      {user && !user.pdpaAccepted && <PdpaModal />}
     </div>
   );
 }

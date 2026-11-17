@@ -10,6 +10,7 @@ import { UserRole } from "@prisma/client";
 import { loginLimiter, passwordChangeLimiter } from "../middleware/rateLimit";
 import { getAccessibleSiteIds } from "../lib/siteAccess";
 import { logAudit } from "../lib/massBalanceEngine";
+import { PDPA_VERSION } from "../lib/pdpa";
 
 export const authRouter = Router();
 
@@ -46,7 +47,7 @@ authRouter.post(
     const token = signToken({ userId: user.id, companyId: user.companyId, role: user.role, email: user.email, name: user.name });
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, companyId: user.companyId },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, companyId: user.companyId, pdpaAccepted: user.pdpaVersion === PDPA_VERSION },
     });
   })
 );
@@ -57,7 +58,29 @@ authRouter.get(
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
     if (!user) throw new AppError("User not found.", 404);
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, companyId: user.companyId });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, companyId: user.companyId, pdpaAccepted: user.pdpaVersion === PDPA_VERSION });
+  })
+);
+
+// The signed-in user accepts the PDPA notice (shown as a popup until they do).
+// Recorded with the notice version and in the audit log as proof of consent.
+authRouter.post(
+  "/accept-pdpa",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+    if (!user || !user.isActive) throw new AppError("User not found.", 404);
+    await prisma.user.update({ where: { id: user.id }, data: { pdpaAcceptedAt: new Date(), pdpaVersion: PDPA_VERSION } });
+    await logAudit(prisma, {
+      companyId: user.companyId,
+      entityType: "User",
+      entityId: user.id,
+      action: "PDPA_ACCEPT",
+      actor: { id: user.id, name: user.name },
+      afterValue: `pdpaVersion=${PDPA_VERSION}`,
+      notes: "User accepted the PDPA notice.",
+    });
+    res.json({ pdpaAccepted: true });
   })
 );
 

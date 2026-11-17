@@ -7,6 +7,8 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Records the user's acceptance of the PDPA notice and closes the popup. */
+  acceptPdpa: () => Promise<void>;
   /** All three roles in the schema (SUPER_ADMIN, COMPANY_ADMIN, COMPANY_USER)
    * can write -- there is no read-only role. Kept as a named flag rather
    * than inlining `!!user` everywhere so a future read-only role (or
@@ -63,11 +65,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const acceptPdpa = useCallback(async () => {
+    await api.post("/auth/accept-pdpa");
+    setUser((u) => (u ? { ...u, pdpaAccepted: true } : u));
+  }, []);
+
   const value: AuthContextValue = {
     user,
     loading,
     login,
     logout,
+    acceptPdpa,
     canWrite: !!user,
     isCompanyAdmin: user?.role === "SUPER_ADMIN" || user?.role === "COMPANY_ADMIN",
     isSuperAdmin: user?.role === "SUPER_ADMIN",
